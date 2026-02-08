@@ -1,0 +1,174 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use gtk::prelude::*;
+
+use crate::core::models::PackageSummary;
+use crate::ui::widgets::card;
+use crate::ui::{run_search, AppContext, UiHandles};
+
+#[derive(Clone)]
+pub struct SearchPage {
+    pub root: gtk::Box,
+    pub entry: gtk::SearchEntry,
+    filter: gtk::DropDown,
+    results: gtk::FlowBox,
+    status: gtk::Label,
+    all_results: Rc<RefCell<Vec<PackageSummary>>>,
+}
+
+impl SearchPage {
+    pub fn new() -> Self {
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        root.set_margin_top(12);
+        root.set_margin_bottom(12);
+        root.set_margin_start(12);
+        root.set_margin_end(12);
+        root.set_hexpand(true);
+        root.set_vexpand(true);
+
+        let title = gtk::Label::new(Some("Search"));
+        title.add_css_class("title-2");
+        title.set_xalign(0.0);
+        root.append(&title);
+
+        let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let entry = gtk::SearchEntry::new();
+        entry.set_placeholder_text(Some("Search packages"));
+        entry.set_hexpand(true);
+
+        let filter = gtk::DropDown::from_strings(&["All", "Repo", "AUR", "Flatpak"]);
+        filter.set_selected(0);
+
+        controls.append(&entry);
+        controls.append(&filter);
+        root.append(&controls);
+
+        let status = gtk::Label::new(Some("Type a package name to search."));
+        status.set_xalign(0.0);
+        status.add_css_class("dim-label");
+        root.append(&status);
+
+        let results = gtk::FlowBox::new();
+        results.set_valign(gtk::Align::Start);
+        results.set_min_children_per_line(2);
+        results.set_max_children_per_line(4);
+        results.set_column_spacing(12);
+        results.set_row_spacing(12);
+        results.set_homogeneous(true);
+        results.set_selection_mode(gtk::SelectionMode::None);
+        root.append(&results);
+
+        Self {
+            root,
+            entry,
+            filter,
+            results,
+            status,
+            all_results: Rc::new(RefCell::new(Vec::new())),
+        }
+    }
+
+    pub fn bind_search(&self, ctx: AppContext, handles: UiHandles, stack: gtk::Stack) {
+        let debounce: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+        let entry = self.entry.clone();
+        let page = self.clone();
+        let filter = self.filter.clone();
+        let ctx_for_search = ctx.clone();
+        let handles_for_search = handles.clone();
+        entry.connect_search_changed(move |entry| {
+            if let Some(id) = debounce.borrow_mut().take() {
+                let _ = std::panic::catch_unwind(|| id.remove());
+            }
+            let query = entry.text().to_string();
+            let ctx = ctx_for_search.clone();
+            let handles = handles_for_search.clone();
+            let page = page.clone();
+            let stack = stack.clone();
+            let debounce_inner = debounce.clone();
+            let id = glib::timeout_add_local(std::time::Duration::from_millis(350), move || {
+                *debounce_inner.borrow_mut() = None;
+                let query = query.trim().to_string();
+                if query.is_empty() {
+                    page.status.set_text("Type a package name to search.");
+                    page.clear_results();
+                    return glib::ControlFlow::Break;
+                }
+                stack.set_visible_child_name("search");
+                page.status.set_text(&format!("Searching for \"{query}\"..."));
+                run_search(query, ctx.clone(), page.clone(), handles.clone());
+                glib::ControlFlow::Break
+            });
+            *debounce.borrow_mut() = Some(id);
+        });
+
+        let ctx_for_filter = ctx.clone();
+        let handles_for_filter = handles.clone();
+        let page = self.clone();
+        filter.connect_selected_notify(move |_| {
+            page.render_filtered(&ctx_for_filter, &handles_for_filter);
+        });
+    }
+
+    pub fn set_results(&self, results: Vec<PackageSummary>, ctx: &AppContext, handles: &UiHandles) {
+        *self.all_results.borrow_mut() = results;
+        self.render_filtered(ctx, handles);
+    }
+
+    fn render_filtered(&self, ctx: &AppContext, handles: &UiHandles) {
+        self.clear_results();
+
+        let selected = self.filter.selected();
+        let results: Vec<PackageSummary> = self
+            .all_results
+            .borrow()
+            .iter()
+            .cloned()
+            .filter(|pkg| match selected {
+                1 => pkg.source == crate::core::models::PackageSource::Repo,
+                2 => pkg.source == crate::core::models::PackageSource::Aur,
+                3 => pkg.source == crate::core::models::PackageSource::Flatpak,
+                _ => true,
+            })
+            .collect();
+
+        if results.is_empty() {
+            self.status.set_text("No results found.");
+            return;
+        }
+
+        self.status
+            .set_text(&format!("{} results", results.len()));
+        for pkg in results {
+            let queue = handles.queue.clone();
+            let handles_for_details = handles.clone();
+            let ctx_for_details = ctx.clone();
+            let pkg_for_action = pkg.clone();
+            let pkg_for_details = pkg.clone();
+            let row = card::build_card(
+                &pkg,
+                move || {
+                    queue.add_install(
+                        pkg_for_action.name.clone(),
+                        pkg_for_action.source,
+                        pkg_for_action.origin.clone(),
+                    );
+                },
+                move || {
+                    crate::ui::details::show_details(
+                        &ctx_for_details,
+                        &handles_for_details,
+                        pkg_for_details.clone(),
+                    );
+                },
+            );
+            self.results.insert(&row, -1);
+        }
+    }
+
+    pub fn clear_results(&self) {
+        while let Some(child) = self.results.first_child() {
+            self.results.remove(&child);
+        }
+    }
+}

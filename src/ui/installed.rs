@@ -1,0 +1,220 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::mpsc;
+
+use gtk::prelude::*;
+
+use crate::core::models::PackageSummary;
+use crate::ui::details;
+use crate::ui::{AppContext, UiHandles};
+
+#[derive(Clone)]
+pub struct InstalledPage {
+    pub root: gtk::Box,
+    list: gtk::ListBox,
+    search: gtk::SearchEntry,
+    filter: gtk::DropDown,
+    update_all: gtk::Button,
+    refresh_button: gtk::Button,
+    all: Rc<RefCell<Vec<PackageSummary>>>,
+    connected: Rc<std::cell::Cell<bool>>,
+}
+
+impl InstalledPage {
+    pub fn new() -> Self {
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        root.set_margin_top(12);
+        root.set_margin_bottom(12);
+        root.set_margin_start(12);
+        root.set_margin_end(12);
+        root.set_hexpand(true);
+        root.set_vexpand(true);
+
+        let title = gtk::Label::new(Some("Installed"));
+        title.add_css_class("title-2");
+        title.set_xalign(0.0);
+        root.append(&title);
+
+        let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let search = gtk::SearchEntry::new();
+        search.set_placeholder_text(Some("Search installed packages"));
+        search.set_hexpand(true);
+
+        let filter = gtk::DropDown::from_strings(&["All", "Repo", "AUR", "Flatpak"]);
+        filter.set_selected(0);
+
+        let update_all = gtk::Button::with_label("Update All");
+        update_all.add_css_class("suggested-action");
+        let refresh_button = gtk::Button::from_icon_name("view-refresh-symbolic");
+        refresh_button.set_tooltip_text(Some("Refresh installed"));
+
+        controls.append(&search);
+        controls.append(&filter);
+        controls.append(&update_all);
+        controls.append(&refresh_button);
+        root.append(&controls);
+
+        let list = gtk::ListBox::new();
+        list.set_selection_mode(gtk::SelectionMode::None);
+
+        let scroller = gtk::ScrolledWindow::new();
+        scroller.set_vexpand(true);
+        scroller.set_child(Some(&list));
+
+        root.append(&scroller);
+
+        Self {
+            root,
+            list,
+            search,
+            filter,
+            update_all,
+            refresh_button,
+            all: Rc::new(RefCell::new(Vec::new())),
+            connected: Rc::new(std::cell::Cell::new(false)),
+        }
+    }
+
+    pub fn refresh(&self, ctx: AppContext, handles: UiHandles) {
+        let page = self.clone();
+        let all_ref = self.all.clone();
+        let (tx, rx) = mpsc::channel();
+        let ctx_thread = ctx.clone();
+        std::thread::spawn(move || {
+            let mut installed = ctx_thread.pacman.list_installed().unwrap_or_default();
+            let mut flatpaks = ctx_thread.flatpak.list_installed().unwrap_or_default();
+            installed.append(&mut flatpaks);
+            let _ = tx.send(installed);
+        });
+
+        let list = self.list.clone();
+        let search = self.search.clone();
+        let filter = self.filter.clone();
+        let update_all = self.update_all.clone();
+        let refresh_button = self.refresh_button.clone();
+        let connected = self.connected.clone();
+        glib::idle_add_local(move || {
+            match rx.try_recv() {
+                Ok(packages) => {
+                    *all_ref.borrow_mut() = packages.clone();
+                    render_list(&list, &packages, &handles, &ctx, 0, "");
+                    if !connected.get() {
+                        connected.set(true);
+                        let handles_for_search = handles.clone();
+                        let ctx_for_search = ctx.clone();
+                        let all_for_search = all_ref.clone();
+                        let list_for_search = list.clone();
+                        let filter_for_search = filter.clone();
+                        search.connect_search_changed(move |entry| {
+                            let query = entry.text().to_string().to_lowercase();
+                            let items = all_for_search.borrow();
+                            render_list(
+                                &list_for_search,
+                                &items,
+                                &handles_for_search,
+                                &ctx_for_search,
+                                filter_for_search.selected(),
+                                &query,
+                            );
+                        });
+
+                        let handles_for_btn = handles.clone();
+                        update_all.connect_clicked(move |_| {
+                            handles_for_btn.queue.add_upgrade_all();
+                        });
+
+                        let ctx_for_refresh = ctx.clone();
+                        let handles_for_refresh = handles.clone();
+                        let page_for_refresh = page.clone();
+                        refresh_button.connect_clicked(move |_| {
+                            page_for_refresh.refresh(ctx_for_refresh.clone(), handles_for_refresh.clone());
+                        });
+
+                        let all_for_filter = all_ref.clone();
+                        let list_for_filter = list.clone();
+                        let handles_for_filter = handles.clone();
+                        let ctx_for_filter = ctx.clone();
+                        let search_for_filter = search.clone();
+                        filter.connect_selected_notify(move |f| {
+                            let query = search_for_filter.text().to_string().to_lowercase();
+                            let items = all_for_filter.borrow();
+                            render_list(
+                                &list_for_filter,
+                                &items,
+                                &handles_for_filter,
+                                &ctx_for_filter,
+                                f.selected(),
+                                &query,
+                            );
+                        });
+                    }
+                    glib::ControlFlow::Break
+                }
+                Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+            }
+        });
+    }
+}
+
+fn build_row(pkg: PackageSummary, handles: &UiHandles, ctx: &AppContext) -> gtk::ListBoxRow {
+    let row = gtk::ListBoxRow::new();
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    content.set_margin_top(8);
+    content.set_margin_bottom(8);
+    content.set_margin_start(8);
+    content.set_margin_end(8);
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let name = gtk::Label::new(Some(&pkg.name));
+    name.add_css_class("title-4");
+    name.set_xalign(0.0);
+
+    let version = gtk::Label::new(Some(&pkg.version));
+    version.set_xalign(0.0);
+
+    text.append(&name);
+    text.append(&version);
+    content.append(&text);
+
+    let details_btn = gtk::Button::with_label("Details");
+    content.append(&details_btn);
+    row.set_child(Some(&content));
+
+    let handles = handles.clone();
+    let ctx = ctx.clone();
+    details_btn.connect_clicked(move |_| {
+        details::show_details(&ctx, &handles, pkg.clone());
+    });
+
+    row
+}
+
+fn render_list(
+    list: &gtk::ListBox,
+    packages: &[PackageSummary],
+    handles: &UiHandles,
+    ctx: &AppContext,
+    filter_idx: u32,
+    query: &str,
+) {
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
+    for pkg in packages {
+        if !query.is_empty() && !pkg.name.to_lowercase().contains(query) {
+            continue;
+        }
+        let matches_filter = match filter_idx {
+            1 => pkg.source == crate::core::models::PackageSource::Repo,
+            2 => pkg.source == crate::core::models::PackageSource::Aur,
+            3 => pkg.source == crate::core::models::PackageSource::Flatpak,
+            _ => true,
+        };
+        if !matches_filter {
+            continue;
+        }
+        let row = build_row(pkg.clone(), handles, ctx);
+        list.append(&row);
+    }
+}

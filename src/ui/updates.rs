@@ -1,0 +1,347 @@
+use std::cell::RefCell;
+use std::process::Command;
+use std::rc::Rc;
+use std::sync::mpsc;
+
+use gtk::prelude::*;
+use libadwaita as adw;
+
+use crate::core::models::{ActionKind, AurHelperKind, PackageSource, TransactionAction};
+use crate::ui::AppContext;
+
+#[derive(Clone)]
+pub struct UpdatesPage {
+    pub root: gtk::Box,
+    check_button: gtk::Button,
+    apply_button: gtk::Button,
+    apply_selected_button: gtk::Button,
+    list: gtk::ListBox,
+    status: gtk::Label,
+    search: gtk::SearchEntry,
+    rows: Rc<RefCell<Vec<(gtk::CheckButton, TransactionAction, String)>>>,
+    all_updates: Rc<RefCell<Vec<(TransactionAction, String)>>>,
+}
+
+impl UpdatesPage {
+    pub fn new() -> Self {
+        let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        root.set_margin_top(12);
+        root.set_margin_bottom(12);
+        root.set_margin_start(12);
+        root.set_margin_end(12);
+        root.set_hexpand(true);
+        root.set_vexpand(true);
+
+        let title = gtk::Label::new(Some("Updates"));
+        title.add_css_class("title-2");
+        title.set_xalign(0.0);
+        root.append(&title);
+
+        let info = gtk::Label::new(Some(
+            "Check and apply updates. System upgrades run through the helper.",
+        ));
+        info.set_wrap(true);
+        info.set_xalign(0.0);
+        root.append(&info);
+
+        let status = gtk::Label::new(Some("No update data"));
+        status.set_xalign(0.0);
+        root.append(&status);
+
+        let search = gtk::SearchEntry::new();
+        search.set_placeholder_text(Some("Filter updates"));
+        root.append(&search);
+
+        let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let check_button = gtk::Button::with_label("Check Updates");
+        let apply_selected_button = gtk::Button::with_label("Update Selected");
+        let apply_button = gtk::Button::with_label("Update All");
+        apply_selected_button.add_css_class("suggested-action");
+        buttons.append(&check_button);
+        buttons.append(&apply_selected_button);
+        buttons.append(&apply_button);
+        root.append(&buttons);
+
+        let list = gtk::ListBox::new();
+        list.set_selection_mode(gtk::SelectionMode::None);
+        let scroller = gtk::ScrolledWindow::new();
+        scroller.set_vexpand(true);
+        scroller.set_child(Some(&list));
+        root.append(&scroller);
+
+        Self {
+            root,
+            check_button,
+            apply_button,
+            apply_selected_button,
+            list,
+            status,
+            search,
+            rows: Rc::new(RefCell::new(Vec::new())),
+            all_updates: Rc::new(RefCell::new(Vec::new())),
+        }
+    }
+
+    pub fn bind(&self, ctx: AppContext) {
+        self.refresh(ctx.clone(), None);
+
+        let list = self.list.clone();
+        let status = self.status.clone();
+        let rows = self.rows.clone();
+        let all_updates = self.all_updates.clone();
+        let search = self.search.clone();
+        self.check_button.connect_clicked(move |_| {
+            let list = list.clone();
+            let status = status.clone();
+            let rows = rows.clone();
+            let all_updates = all_updates.clone();
+            let search = search.clone();
+            let ctx = ctx.clone();
+            let (tx, rx) = mpsc::channel();
+            std::thread::spawn(move || {
+                let items = collect_updates(&ctx);
+                let _ = tx.send(items);
+            });
+
+            glib::idle_add_local(move || {
+                match rx.try_recv() {
+                    Ok(items) => {
+                        *all_updates.borrow_mut() = items;
+                        render_updates(&list, &rows, &all_updates.borrow(), &search.text(), &status);
+                        glib::ControlFlow::Break
+                    }
+                    Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                    Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+                }
+            });
+        });
+
+        let list = self.list.clone();
+        let rows = self.rows.clone();
+        let status = self.status.clone();
+        let all_updates = self.all_updates.clone();
+        self.search.connect_search_changed(move |entry| {
+            let query = entry.text().to_string();
+            let items = all_updates.borrow();
+            render_updates(&list, &rows, &items, &query, &status);
+        });
+    }
+
+    pub fn refresh(&self, ctx: AppContext, notify: Option<adw::ToastOverlay>) {
+        let list = self.list.clone();
+        let status = self.status.clone();
+        let rows = self.rows.clone();
+        let all_updates = self.all_updates.clone();
+        let search = self.search.clone();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let items = collect_updates(&ctx);
+            let _ = tx.send(items);
+        });
+
+        let notify = notify.clone();
+        glib::idle_add_local(move || match rx.try_recv() {
+            Ok(items) => {
+                *all_updates.borrow_mut() = items;
+                render_updates(&list, &rows, &all_updates.borrow(), &search.text(), &status);
+                if let Some(toasts) = notify.as_ref() {
+                    let count = all_updates.borrow().len();
+                    if count > 0 {
+                        toasts.add_toast(adw::Toast::new(&format!(
+                            "{} updates available",
+                            count
+                        )));
+                    }
+                }
+                glib::ControlFlow::Break
+            }
+            Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+        });
+    }
+
+    pub fn connect_apply_all<F: Fn() + 'static>(&self, f: F) {
+        self.apply_button.connect_clicked(move |_| f());
+    }
+
+    pub fn connect_apply_selected<F: Fn(Vec<TransactionAction>) + 'static>(&self, f: F) {
+        let rows = self.rows.clone();
+        self.apply_selected_button.connect_clicked(move |_| {
+            let selected: Vec<TransactionAction> = rows
+                .borrow()
+                .iter()
+                .filter(|(check, _, _)| check.is_active())
+                .map(|(_, action, _)| action.clone())
+                .collect();
+            f(selected);
+        });
+    }
+}
+
+fn collect_updates(ctx: &AppContext) -> Vec<(TransactionAction, String)> {
+    let mut items = Vec::new();
+    items.extend(collect_pacman_updates());
+    items.extend(collect_aur_updates(ctx));
+    items.extend(collect_flatpak_updates());
+    items
+}
+
+fn render_updates(
+    list: &gtk::ListBox,
+    rows: &Rc<RefCell<Vec<(gtk::CheckButton, TransactionAction, String)>>>,
+    items: &[(TransactionAction, String)],
+    query: &str,
+    status: &gtk::Label,
+) {
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
+    rows.borrow_mut().clear();
+
+    let q = query.trim().to_lowercase();
+    let filtered: Vec<(TransactionAction, String)> = if q.is_empty() {
+        items.to_vec()
+    } else {
+        items
+            .iter()
+            .filter(|(_, display)| display.to_lowercase().contains(&q))
+            .cloned()
+            .collect()
+    };
+
+    if filtered.is_empty() {
+        status.set_text("System is up to date");
+        return;
+    }
+
+    status.set_text(&format!("{} updates available", filtered.len()));
+    for (action, display) in filtered {
+        let check = gtk::CheckButton::new();
+        check.set_active(true);
+        let label = gtk::Label::new(Some(&display));
+        label.set_xalign(0.0);
+        label.set_wrap(true);
+
+        let row_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        row_box.set_margin_top(6);
+        row_box.set_margin_bottom(6);
+        row_box.set_margin_start(6);
+        row_box.set_margin_end(6);
+        row_box.append(&check);
+        row_box.append(&label);
+
+        let row = gtk::ListBoxRow::new();
+        row.set_child(Some(&row_box));
+        list.append(&row);
+
+        rows.borrow_mut().push((check, action, display));
+    }
+}
+
+fn collect_pacman_updates() -> Vec<(TransactionAction, String)> {
+    let output = Command::new("pacman")
+        .args(["-Qu"])
+        .env("LC_ALL", "C")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default();
+
+    output
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|line| {
+            let name = line.split_whitespace().next().unwrap_or("").to_string();
+            (
+                TransactionAction {
+                    name,
+                    source: PackageSource::Repo,
+                    kind: ActionKind::Install,
+                    origin: None,
+                },
+                line.to_string(),
+            )
+        })
+        .collect()
+}
+
+fn collect_aur_updates(ctx: &AppContext) -> Vec<(TransactionAction, String)> {
+    let helper = match ctx.settings.lock() {
+        Ok(settings) => settings.aur_helper,
+        Err(_) => AurHelperKind::Yay,
+    };
+    let output = Command::new(helper.as_str())
+        .args(["-Qua"])
+        .env("LC_ALL", "C")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default();
+
+    output
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|line| {
+            let name = line.split_whitespace().next().unwrap_or("").to_string();
+            (
+                TransactionAction {
+                    name,
+                    source: PackageSource::Aur,
+                    kind: ActionKind::Install,
+                    origin: None,
+                },
+                format!("{line} (AUR)"),
+            )
+        })
+        .collect()
+}
+
+fn collect_flatpak_updates() -> Vec<(TransactionAction, String)> {
+    let output = Command::new("flatpak")
+        .args([
+            "remote-ls",
+            "--updates",
+            "--columns=application,version,branch,remote",
+        ])
+        .env("LC_ALL", "C")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default();
+
+    let mut items = Vec::new();
+    for line in output.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let cols: Vec<&str> = line.split('\t').collect();
+        let app_id = cols.get(0).unwrap_or(&"").trim().to_string();
+        if app_id.is_empty() {
+            continue;
+        }
+        let version = cols.get(1).unwrap_or(&"").trim();
+        let branch = cols.get(2).unwrap_or(&"").trim();
+        let remote = cols.get(3).unwrap_or(&"").trim();
+        let mut display = app_id.clone();
+        if !version.is_empty() {
+            display.push_str(&format!(" {version}"));
+        } else if !branch.is_empty() {
+            display.push_str(&format!(" {branch}"));
+        }
+        if !remote.is_empty() {
+            display.push_str(&format!(" ({remote})"));
+        }
+        display.push_str(" [Flatpak]");
+
+        items.push((
+            TransactionAction {
+                name: app_id,
+                source: PackageSource::Flatpak,
+                kind: ActionKind::Upgrade,
+                origin: None,
+            },
+            display,
+        ));
+    }
+    items
+}

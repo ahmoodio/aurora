@@ -1,0 +1,227 @@
+use std::sync::Arc;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::mpsc;
+
+use gtk::prelude::*;
+use libadwaita as adw;
+use adw::prelude::*;
+
+use crate::core::appstream::AppStreamClient;
+use crate::core::models::{PackageDetails, PackageSource, PackageSummary};
+use crate::ui::{AppContext, UiHandles};
+use crate::ui::widgets::screenshot_carousel::ScreenshotCarousel;
+
+pub fn show_details(ctx: &AppContext, handles: &UiHandles, summary: PackageSummary) {
+    let page = adw::NavigationPage::builder()
+        .title(&summary.name)
+        .build();
+
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    root.set_margin_top(16);
+    root.set_margin_bottom(16);
+    root.set_margin_start(16);
+    root.set_margin_end(16);
+    root.set_hexpand(true);
+    root.set_vexpand(true);
+
+    let back_btn = gtk::Button::from_icon_name("go-previous-symbolic");
+    back_btn.add_css_class("flat");
+    back_btn.set_halign(gtk::Align::Start);
+    back_btn.set_tooltip_text(Some("Back"));
+
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    let icon = gtk::Image::from_icon_name("application-x-executable");
+    icon.set_pixel_size(96);
+
+    let text_col = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    let name = gtk::Label::new(Some(&summary.name));
+    name.add_css_class("title-1");
+    name.set_xalign(0.0);
+
+    let summary_label = gtk::Label::new(Some(&summary.summary));
+    summary_label.set_xalign(0.0);
+    summary_label.set_wrap(true);
+
+    let badges = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    let source_badge = gtk::Label::new(Some(match summary.source {
+        PackageSource::Repo => "Repo",
+        PackageSource::Aur => "AUR",
+        PackageSource::Flatpak => "Flatpak",
+    }));
+    source_badge.add_css_class("pill");
+    badges.append(&source_badge);
+
+    text_col.append(&name);
+    text_col.append(&summary_label);
+    text_col.append(&badges);
+
+    header.append(&icon);
+    header.append(&text_col);
+
+    let button_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let installed_state = Rc::new(RefCell::new(summary.installed));
+    let action_btn = gtk::Button::with_label(if summary.installed { "Remove" } else { "Install" });
+    action_btn.add_css_class("suggested-action");
+    let update_btn = gtk::Button::with_label("Update");
+    update_btn.set_visible(summary.installed);
+    let logs_btn = gtk::Button::with_label("View Logs");
+    button_row.append(&action_btn);
+    button_row.append(&update_btn);
+    button_row.append(&logs_btn);
+
+    let carousel = ScreenshotCarousel::new();
+
+    let details = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    let version = gtk::Label::new(Some("Version: -"));
+    version.set_xalign(0.0);
+    let installed = gtk::Label::new(Some("Installed: no"));
+    installed.set_xalign(0.0);
+    let size = gtk::Label::new(Some("Size: -"));
+    size.set_xalign(0.0);
+    details.append(&version);
+    details.append(&installed);
+    details.append(&size);
+
+    let description = gtk::Label::new(Some(""));
+    description.set_xalign(0.0);
+    description.set_wrap(true);
+
+    root.append(&back_btn);
+    root.append(&header);
+    root.append(&button_row);
+    root.append(carousel.widget());
+    root.append(&details);
+    root.append(&description);
+
+    page.set_child(Some(&root));
+    handles.nav_view.push(&page);
+
+    let nav = handles.nav_view.clone();
+    back_btn.connect_clicked(move |_| {
+        nav.pop();
+    });
+
+    let ctx_clone = ctx.clone();
+    let summary_clone = summary.clone();
+    let icon_clone = icon.clone();
+    let summary_label_clone = summary_label.clone();
+    let version_clone = version.clone();
+    let installed_clone = installed.clone();
+    let size_clone = size.clone();
+    let description_clone = description.clone();
+    let carousel_clone = carousel.clone();
+    let action_btn_clone = action_btn.clone();
+    let update_btn_clone = update_btn.clone();
+    let installed_state_clone = installed_state.clone();
+    let appstream = ctx.appstream.clone();
+
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let details = load_details(ctx_clone, summary_clone, appstream);
+        let _ = tx.send(details);
+    });
+
+    glib::idle_add_local(move || {
+        match rx.try_recv() {
+            Ok(details) => {
+                if let Some(icon_name) = &details.icon_name {
+                    icon_clone.set_icon_name(Some(icon_name));
+                }
+                summary_label_clone.set_text(&details.summary);
+                version_clone.set_text(&format!("Version: {}", details.version));
+                installed_clone.set_text(&format!(
+                    "Installed: {}",
+                    if details.installed { "yes" } else { "no" }
+                ));
+                *installed_state_clone.borrow_mut() = details.installed;
+                action_btn_clone.set_label(if details.installed { "Remove" } else { "Install" });
+                update_btn_clone.set_visible(details.installed);
+                if let Some(size) = &details.size {
+                    size_clone.set_text(&format!("Size: {size}"));
+                }
+                description_clone.set_text(&details.description);
+                carousel_clone.set_screenshots(details.screenshots.clone());
+                glib::ControlFlow::Break
+            }
+            Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+        }
+    });
+
+    let queue = handles.queue.clone();
+    let pkg_name = summary.name.clone();
+    let pkg_source = summary.source;
+    let pkg_origin = summary.origin.clone();
+    let installed_state = installed_state.clone();
+    action_btn.connect_clicked(move |_| {
+        if *installed_state.borrow() {
+            queue.add_remove(pkg_name.clone(), pkg_source);
+        } else {
+            queue.add_install(pkg_name.clone(), pkg_source, pkg_origin.clone());
+        }
+    });
+
+    let queue = handles.queue.clone();
+    let pkg_name = summary.name.clone();
+    let pkg_source = summary.source;
+    let pkg_origin = summary.origin.clone();
+    update_btn.connect_clicked(move |_| {
+        queue.add_install(pkg_name.clone(), pkg_source, pkg_origin.clone());
+    });
+
+    let drawer = handles.log_drawer.clone();
+    logs_btn.connect_clicked(move |_| {
+        let visible = drawer.is_visible();
+        drawer.set_visible(!visible);
+    });
+}
+
+fn load_details(ctx: AppContext, summary: PackageSummary, appstream: Arc<AppStreamClient>) -> PackageDetails {
+    let mut details = match summary.source {
+        PackageSource::Repo => {
+            if summary.installed {
+                ctx.pacman.info_installed(&summary.name).unwrap_or_else(|_| fallback_details(&summary))
+            } else {
+                ctx.pacman.info_repo(&summary.name).unwrap_or_else(|_| fallback_details(&summary))
+            }
+        }
+        PackageSource::Aur => ctx.aur.info(&summary.name).unwrap_or_else(|_| fallback_details(&summary)),
+        PackageSource::Flatpak => ctx
+            .flatpak
+            .info(&summary.name)
+            .unwrap_or_else(|_| fallback_details(&summary)),
+    };
+
+    if let Some(component) = appstream.search_component(&summary.name) {
+        let comp = appstream
+            .get_component(&component.id)
+            .unwrap_or(component);
+        if let Some(summary) = comp.summary {
+            details.summary = summary;
+        }
+        if comp.icon_name.is_some() {
+            details.icon_name = comp.icon_name;
+        }
+        if !comp.screenshots.is_empty() {
+            details.screenshots = comp.screenshots.clone();
+        }
+    }
+
+    details
+}
+
+fn fallback_details(summary: &PackageSummary) -> PackageDetails {
+    PackageDetails {
+        name: summary.name.clone(),
+        summary: summary.summary.clone(),
+        description: summary.summary.clone(),
+        version: summary.version.clone(),
+        source: summary.source,
+        installed: summary.installed,
+        size: None,
+        home: None,
+        screenshots: Vec::new(),
+        icon_name: None,
+    }
+}
