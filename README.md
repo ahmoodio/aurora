@@ -77,6 +77,64 @@ All wrapped in a clean, store-like interface inspired by modern Linux desktops.
   - Interactive by default (no forced `--noconfirm`)
 
 ---
+## 🌟 Why Aurora vs Pamac / Octopi?
+
+Aurora is **not** trying to replace Pamac or Octopi — it exists to solve a *different set of problems*.
+
+### 🆚 Aurora vs Pamac
+
+| Aurora | Pamac |
+|------|-------|
+| Wayland-first (GTK4 + libadwaita) | Primarily GTK3 / mixed backends |
+| Focused on transparency and safety | Convenience-first abstractions |
+| Explicit transaction review | Often hides low-level pacman details |
+| Strict polkit helper model | Broader privileged execution |
+| Designed for Arch users | Originally designed for Manjaro |
+
+**Aurora’s philosophy:**  
+> *Show the user exactly what will happen — and let them decide.*
+
+---
+
+### 🆚 Aurora vs Octopi
+
+| Aurora | Octopi |
+|------|-------|
+| Modern, store-like UI | Traditional utility-style UI |
+| AppStream icons & screenshots | Text-focused package lists |
+| Designed for Wayland + GTK4 | Qt / X11-centric |
+| Guided install & review flow | Power-user workflows |
+| Visual clarity for discovery | Optimized for speed & control |
+
+**Aurora’s philosophy:**  
+> *Package management can be powerful **and** approachable.*
+
+---
+
+### 🎯 Who Aurora Is For
+
+Aurora is ideal if you want:
+- A **modern, native Wayland experience**
+- Visual app discovery with real metadata
+- Clear, reviewable system changes
+- A GUI that respects Arch’s philosophy without hiding it
+
+Aurora intentionally avoids:
+- Running entire sessions as root
+- Silent background changes
+- “Magic” automation without visibility
+
+---
+
+### 🧠 Design Goal
+
+Aurora aims to sit **between**:
+- **Pamac** (convenience)
+- **Octopi** (raw control)
+
+…offering a **safe, modern middle ground** for Arch users who want clarity without friction.
+
+---
 
 ## 📥 Installation
 
