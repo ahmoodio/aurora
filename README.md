@@ -1,10 +1,4 @@
-Got you 😄 — here it is **clean, fixed, and in ONE single copy-paste block**, properly formatted Markdown, no broken fences, no mixed sections.
 
-You can paste this **as-is** into `README.md`.
-
----
-
-````md
 # AURORA
 <div align="center">
   <img src="https://raw.githubusercontent.com/ahmoodio/aurora/main/assets/logo.png" alt="Aurora logo" width="180"/>
