@@ -17,13 +17,14 @@
   <img alt="libadwaita" src="https://img.shields.io/badge/libadwaita-3D3D3D.svg?style=flat">
   <img alt="Pacman" src="https://img.shields.io/badge/pacman-1793D1.svg?style=flat&logo=arch-linux&logoColor=white">
 
-  <p>
-    <a href="#-overview">🌌 Overview</a> •
-    <a href="#-features">✨ Features</a> •
-    <a href="#-installation">📥 Installation</a> •
-    <a href="#-security-model">🔐 Security</a> •
-    <a href="#-development">🧩 Development</a>
-  </p>
+<p>
+  <a href="#-overview">🌌 Overview</a> •
+  <a href="#-features">✨ Features</a> •
+  <a href="#-why-aurora-vs-pamac--octopi">🌟 Why Aurora</a> •
+  <a href="#-installation">📥 Installation</a> •
+  <a href="#-security-model">🔐 Security</a> •
+  <a href="#-development">🧩 Development</a>
+</p>
 </div>
 
 ---
