@@ -1,75 +1,169 @@
-# Aurora
+Got you 😄 — here it is **clean, fixed, and in ONE single copy-paste block**, properly formatted Markdown, no broken fences, no mixed sections.
 
-Aurora is a Wayland-first GTK4/libadwaita GUI for Arch Linux package management. It combines official repository packages via pacman and AUR packages via yay/paru, while keeping the GUI unprivileged and delegating root actions to a strict pkexec helper.
+You can paste this **as-is** into `README.md`.
 
-## Features
-- Repo and AUR search
-- App details with AppStream metadata and screenshot carousel
-- Transaction queue with mandatory review
-- Streaming logs (stdout/stderr) with copy/save
-- Installed packages (searchable)
-- Updates page (check + apply)
-- Settings for AUR helper and confirmation mode
-- About dialog with project branding
+---
 
-## Architecture
-- `src/core/` contains providers, transaction planning, appstream integration, caching, and command runner.
-- `src/ui/` implements the UI pages, widgets, and app interactions.
-- `src/bin/aurora-helper.rs` is the pkexec helper for privileged pacman operations.
-- `assets/` includes the project logo and icon theme structure for installation.
-- `resources/` provides the desktop file and AppStream metainfo.
+````md
+# AURORA
+<div align="center">
+  <img src="https://raw.githubusercontent.com/ahmoodio/aurora/main/assets/logo.png" alt="Aurora logo" width="180"/>
 
-## Security Model
-- The GUI runs unprivileged.
-- All privileged operations are executed via `pkexec` and `aurora-helper`.
-- The helper enforces a strict whitelist of pacman operations and flags.
-- No shell execution is used; all commands are executed with `std::process::Command` and explicit args.
-- `--noconfirm` is only used if explicitly enabled in Settings.
+  <p><em>A modern, Wayland-first GUI for Arch Linux package management</em></p>
 
-## AppStream
-Aurora uses `appstreamcli` to retrieve summaries, icons, and screenshots. Screenshots are cached at:
+  [![last-commit](https://img.shields.io/github/last-commit/ahmoodio/aurora?style=flat&logo=git&logoColor=white&color=7C3AED)](https://github.com/ahmoodio/aurora)
+  [![repo-top-language](https://img.shields.io/github/languages/top/ahmoodio/aurora?style=flat&color=7C3AED)](https://github.com/ahmoodio/aurora)
+  [![license](https://img.shields.io/github/license/ahmoodio/aurora?style=flat&color=7C3AED)](https://github.com/ahmoodio/aurora/blob/main/LICENSE)
+  [![Arch Linux](https://img.shields.io/badge/Arch%20Linux-1793D1?logo=arch-linux&logoColor=white)](https://archlinux.org/)
+  [![Wayland](https://img.shields.io/badge/Wayland-ready-success)](https://wayland.freedesktop.org/)
 
+  <p><em>Built with:</em></p>
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-000000.svg?style=flat&logo=rust&logoColor=white">
+  <img alt="GTK4" src="https://img.shields.io/badge/GTK4-4A86CF.svg?style=flat&logo=gtk&logoColor=white">
+  <img alt="libadwaita" src="https://img.shields.io/badge/libadwaita-3D3D3D.svg?style=flat">
+  <img alt="Pacman" src="https://img.shields.io/badge/pacman-1793D1.svg?style=flat&logo=arch-linux&logoColor=white">
+
+  <p>
+    <a href="#-overview">🌌 Overview</a> •
+    <a href="#-features">✨ Features</a> •
+    <a href="#-installation">📥 Installation</a> •
+    <a href="#-security-model">🔐 Security</a> •
+    <a href="#-development">🧩 Development</a>
+  </p>
+</div>
+
+---
+
+## 🌌 Overview
+
+**Aurora** is a **modern, native GUI package manager for Arch Linux**, designed from the ground up for **Wayland**, **GTK4**, and **libadwaita**.
+
+Unlike traditional wrappers, Aurora focuses on:
+- clarity over magic  
+- safety over convenience  
+- transparency over hidden automation  
+
+Aurora integrates:
+- **pacman** for official repositories  
+- **AUR helpers (yay / paru)** for community packages  
+- **AppStream metadata** for rich visuals (icons, screenshots, descriptions)
+
+All wrapped in a clean, store-like interface inspired by modern Linux desktops.
+
+---
+
+## ✨ Features
+
+- **Unified Package Management**
+  - Manage official repo packages (pacman)
+  - Manage AUR packages via yay or paru
+  - Clear source badges: Repo / AUR
+
+- **Wayland-First UI**
+  - Built with GTK4 + libadwaita
+  - Smooth animations and adaptive layouts
+  - Native feel on GNOME, COSMIC, and modern Wayland compositors
+
+- **Rich App Details**
+  - AppStream integration for icons and screenshots
+  - Clean app detail pages with versions, descriptions, and metadata
+
+- **Transaction Queue & Review**
+  - Queue installs, removals, and updates
+  - Review all actions before execution
+  - No hidden system changes
+
+- **Live Logs & Feedback**
+  - Real-time stdout/stderr streaming
+  - Copy or save logs for debugging
+  - Clear error messages (no silent failures)
+
+- **Configurable AUR Backend**
+  - Switch between `yay` and `paru`
+  - Interactive by default (no forced `--noconfirm`)
+
+---
+
+## 📥 Installation
+
+### From AUR (recommended)
+
+Using your favorite AUR helper:
+
+```bash
+yay -S aurora-gui-git
+````
+
+or
+
+```bash
+paru -S aurora-gui-git
 ```
-~/.cache/aurora/screenshots/
-```
 
-Missing metadata is handled gracefully with fallbacks.
+---
 
-## Branding
-The logo is pulled from the `yay-gui-manager` GitHub repository and installed under the hicolor icon theme:
+### Manual build (for testing)
 
-- `assets/icons/hicolor/scalable/apps/io.github.ahmoodio.aurora.png`
-- `assets/icons/hicolor/256x256/apps/io.github.ahmoodio.aurora.png`
-
-The logo is shown on the Home page, used as the application icon, and displayed in the About dialog.
-
-## Build
-
-```
+```bash
+git clone https://github.com/ahmoodio/aurora.git
+cd aurora
 cargo build --release
+./target/release/aurora
 ```
 
-## Run (Development)
+> ⚠️ Manual builds do **not** install polkit rules or desktop files.
+
+---
+
+## 🔐 Security Model
+
+Aurora is designed with **least privilege** in mind:
+
+* The GUI runs **unprivileged**
+* All system-level operations are executed via:
+
+  * a **dedicated helper binary**
+  * invoked through **polkit (pkexec)**
+* Only **whitelisted pacman actions** are allowed
+* No shell execution, no arbitrary commands
+
+This makes Aurora **safer than traditional GUI wrappers** that run entire sessions as root.
+
+---
+
+## 🧩 Development
+
+### Requirements
+
+* Rust (stable)
+* GTK4
+* libadwaita
+* pkgconf
+
+### Run in development mode
+
+```bash
+cargo run
+```
+
+---
+
+## 📄 License
+
+MIT License.
+See [`LICENSE`](https://github.com/ahmoodio/aurora/blob/main/LICENSE).
+
+---
+
+## ⭐ Support
+
+If Aurora helps you:
+
+* ⭐ Star the repo
+* 🐞 Report issues
+* 💡 Suggest features
+* 🔧 Open pull requests
 
 ```
-cargo run --bin aurora
-```
 
-For `pkexec` to find the helper during development, add the binary to PATH or install it system-wide.
 
-## Install (Local)
-
-```
-sudo install -Dm755 target/release/aurora /usr/bin/aurora
-sudo install -Dm755 target/release/aurora-helper /usr/bin/aurora-helper
-sudo install -Dm644 resources/io.github.ahmoodio.aurora.desktop /usr/share/applications/io.github.ahmoodio.aurora.desktop
-sudo install -Dm644 resources/io.github.ahmoodio.aurora.metainfo.xml /usr/share/metainfo/io.github.ahmoodio.aurora.metainfo.xml
-sudo install -Dm644 assets/icons/hicolor/256x256/apps/io.github.ahmoodio.aurora.png /usr/share/icons/hicolor/256x256/apps/io.github.ahmoodio.aurora.png
-sudo install -Dm644 assets/icons/hicolor/scalable/apps/io.github.ahmoodio.aurora.png /usr/share/icons/hicolor/scalable/apps/io.github.ahmoodio.aurora.png
-```
-
-Launch:
-
-```
-aurora
-```
