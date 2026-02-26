@@ -11,7 +11,8 @@ use crate::ui::{run_search, AppContext, UiHandles};
 pub struct SearchPage {
     pub root: gtk::Box,
     pub entry: gtk::SearchEntry,
-    filter: gtk::DropDown,
+    source_filter: gtk::DropDown,
+    state_filter: gtk::DropDown,
     results: gtk::FlowBox,
     status: gtk::Label,
     all_results: Rc<RefCell<Vec<PackageSummary>>>,
@@ -37,11 +38,14 @@ impl SearchPage {
         entry.set_placeholder_text(Some("Search packages"));
         entry.set_hexpand(true);
 
-        let filter = gtk::DropDown::from_strings(&["All", "Repo", "AUR", "Flatpak"]);
-        filter.set_selected(0);
+        let source_filter = gtk::DropDown::from_strings(&["All Sources", "Pacman", "AUR", "Flatpak"]);
+        source_filter.set_selected(0);
+        let state_filter = gtk::DropDown::from_strings(&["All States", "Installed", "Not Installed"]);
+        state_filter.set_selected(0);
 
         controls.append(&entry);
-        controls.append(&filter);
+        controls.append(&source_filter);
+        controls.append(&state_filter);
         root.append(&controls);
 
         let status = gtk::Label::new(Some("Type a package name to search."));
@@ -62,7 +66,8 @@ impl SearchPage {
         Self {
             root,
             entry,
-            filter,
+            source_filter,
+            state_filter,
             results,
             status,
             all_results: Rc::new(RefCell::new(Vec::new())),
@@ -73,7 +78,6 @@ impl SearchPage {
         let debounce: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
         let entry = self.entry.clone();
         let page = self.clone();
-        let filter = self.filter.clone();
         let ctx_for_search = ctx.clone();
         let handles_for_search = handles.clone();
         entry.connect_search_changed(move |entry| {
@@ -105,8 +109,15 @@ impl SearchPage {
         let ctx_for_filter = ctx.clone();
         let handles_for_filter = handles.clone();
         let page = self.clone();
-        filter.connect_selected_notify(move |_| {
+        self.source_filter.connect_selected_notify(move |_| {
             page.render_filtered(&ctx_for_filter, &handles_for_filter);
+        });
+
+        let ctx_for_state = ctx.clone();
+        let handles_for_state = handles.clone();
+        let page = self.clone();
+        self.state_filter.connect_selected_notify(move |_| {
+            page.render_filtered(&ctx_for_state, &handles_for_state);
         });
     }
 
@@ -118,22 +129,28 @@ impl SearchPage {
     fn render_filtered(&self, ctx: &AppContext, handles: &UiHandles) {
         self.clear_results();
 
-        let selected = self.filter.selected();
+        let selected_source = self.source_filter.selected();
+        let selected_state = self.state_filter.selected();
         let results: Vec<PackageSummary> = self
             .all_results
             .borrow()
             .iter()
             .cloned()
-            .filter(|pkg| match selected {
+            .filter(|pkg| match selected_source {
                 1 => pkg.source == crate::core::models::PackageSource::Repo,
                 2 => pkg.source == crate::core::models::PackageSource::Aur,
                 3 => pkg.source == crate::core::models::PackageSource::Flatpak,
                 _ => true,
             })
+            .filter(|pkg| match selected_state {
+                1 => pkg.installed,
+                2 => !pkg.installed,
+                _ => true,
+            })
             .collect();
 
         if results.is_empty() {
-            self.status.set_text("No results found.");
+            self.status.set_text("No results found for selected filters.");
             return;
         }
 

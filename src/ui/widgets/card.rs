@@ -41,7 +41,7 @@ where
     summary.set_max_width_chars(36);
 
     let badge = gtk::Label::new(Some(match pkg.source {
-        crate::core::models::PackageSource::Repo => "Repo",
+        crate::core::models::PackageSource::Repo => "Pacman",
         crate::core::models::PackageSource::Aur => "AUR",
         crate::core::models::PackageSource::Flatpak => "Flatpak",
     }));

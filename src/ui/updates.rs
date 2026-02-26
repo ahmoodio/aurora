@@ -20,6 +20,7 @@ pub struct UpdatesPage {
     list: gtk::ListBox,
     status: gtk::Label,
     search: gtk::SearchEntry,
+    source_filter: gtk::DropDown,
     rows: Rc<RefCell<Vec<(gtk::CheckButton, TransactionAction, String)>>>,
     all_updates: Rc<RefCell<Vec<(TransactionAction, String)>>>,
 }
@@ -53,6 +54,10 @@ impl UpdatesPage {
         let search = gtk::SearchEntry::new();
         search.set_placeholder_text(Some("Filter updates"));
         root.append(&search);
+        let source_filter =
+            gtk::DropDown::from_strings(&["All Sources", "Pacman", "AUR", "Flatpak"]);
+        source_filter.set_selected(0);
+        root.append(&source_filter);
 
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let check_button = gtk::Button::with_label("Check Updates");
@@ -85,6 +90,7 @@ impl UpdatesPage {
             list,
             status,
             search,
+            source_filter,
             rows: Rc::new(RefCell::new(Vec::new())),
             all_updates: Rc::new(RefCell::new(Vec::new())),
         }
@@ -112,12 +118,14 @@ impl UpdatesPage {
         let rows = self.rows.clone();
         let all_updates = self.all_updates.clone();
         let search = self.search.clone();
+        let source_filter = self.source_filter.clone();
         self.check_button.connect_clicked(move |_| {
             let list = list.clone();
             let status = status.clone();
             let rows = rows.clone();
             let all_updates = all_updates.clone();
             let search = search.clone();
+            let source_filter = source_filter.clone();
             let ctx = ctx.clone();
             let (tx, rx) = mpsc::channel();
             std::thread::spawn(move || {
@@ -129,7 +137,14 @@ impl UpdatesPage {
                 match rx.try_recv() {
                     Ok(items) => {
                         *all_updates.borrow_mut() = items;
-                        render_updates(&list, &rows, &all_updates.borrow(), &search.text(), &status);
+                        render_updates(
+                            &list,
+                            &rows,
+                            &all_updates.borrow(),
+                            &search.text(),
+                            source_filter.selected(),
+                            &status,
+                        );
                         glib::ControlFlow::Break
                     }
                     Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
@@ -142,10 +157,29 @@ impl UpdatesPage {
         let rows = self.rows.clone();
         let status = self.status.clone();
         let all_updates = self.all_updates.clone();
+        let source_filter = self.source_filter.clone();
         self.search.connect_search_changed(move |entry| {
             let query = entry.text().to_string();
             let items = all_updates.borrow();
-            render_updates(&list, &rows, &items, &query, &status);
+            render_updates(
+                &list,
+                &rows,
+                &items,
+                &query,
+                source_filter.selected(),
+                &status,
+            );
+        });
+
+        let list = self.list.clone();
+        let rows = self.rows.clone();
+        let status = self.status.clone();
+        let all_updates = self.all_updates.clone();
+        let search = self.search.clone();
+        self.source_filter.connect_selected_notify(move |f| {
+            let query = search.text().to_string();
+            let items = all_updates.borrow();
+            render_updates(&list, &rows, &items, &query, f.selected(), &status);
         });
     }
 
@@ -155,6 +189,7 @@ impl UpdatesPage {
         let rows = self.rows.clone();
         let all_updates = self.all_updates.clone();
         let search = self.search.clone();
+        let source_filter = self.source_filter.clone();
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let items = collect_updates(&ctx);
@@ -165,7 +200,14 @@ impl UpdatesPage {
         glib::idle_add_local(move || match rx.try_recv() {
             Ok(items) => {
                 *all_updates.borrow_mut() = items;
-                render_updates(&list, &rows, &all_updates.borrow(), &search.text(), &status);
+                render_updates(
+                    &list,
+                    &rows,
+                    &all_updates.borrow(),
+                    &search.text(),
+                    source_filter.selected(),
+                    &status,
+                );
                 if let Some(toasts) = notify.as_ref() {
                     let count = all_updates.borrow().len();
                     if count > 0 {
@@ -213,6 +255,7 @@ fn render_updates(
     rows: &Rc<RefCell<Vec<(gtk::CheckButton, TransactionAction, String)>>>,
     items: &[(TransactionAction, String)],
     query: &str,
+    source_filter_idx: u32,
     status: &gtk::Label,
 ) {
     while let Some(child) = list.first_child() {
@@ -221,22 +264,32 @@ fn render_updates(
     rows.borrow_mut().clear();
 
     let q = query.trim().to_lowercase();
-    let filtered: Vec<(TransactionAction, String)> = if q.is_empty() {
-        items.to_vec()
-    } else {
-        items
-            .iter()
-            .filter(|(_, display)| display.to_lowercase().contains(&q))
-            .cloned()
-            .collect()
-    };
+    let filtered: Vec<(TransactionAction, String)> = items
+        .iter()
+        .filter(|(action, _)| match source_filter_idx {
+            1 => action.source == PackageSource::Repo,
+            2 => action.source == PackageSource::Aur,
+            3 => action.source == PackageSource::Flatpak,
+            _ => true,
+        })
+        .filter(|(_, display)| q.is_empty() || display.to_lowercase().contains(&q))
+        .cloned()
+        .collect();
 
     if filtered.is_empty() {
-        status.set_text("System is up to date");
+        if items.is_empty() {
+            status.set_text("System is up to date");
+        } else {
+            status.set_text("No updates match selected filters");
+        }
         return;
     }
 
-    status.set_text(&format!("{} updates available", filtered.len()));
+    status.set_text(&format!(
+        "{} updates shown ({} total)",
+        filtered.len(),
+        items.len()
+    ));
     for (action, display) in filtered {
         let check = gtk::CheckButton::new();
         check.set_active(true);

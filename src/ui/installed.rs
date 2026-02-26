@@ -40,7 +40,7 @@ impl InstalledPage {
         search.set_placeholder_text(Some("Search installed packages"));
         search.set_hexpand(true);
 
-        let filter = gtk::DropDown::from_strings(&["All", "Repo", "AUR", "Flatpak"]);
+        let filter = gtk::DropDown::from_strings(&["All", "Pacman", "AUR", "Flatpak"]);
         filter.set_selected(0);
 
         let update_all = gtk::Button::with_label("Update All");

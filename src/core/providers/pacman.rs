@@ -1,4 +1,5 @@
 use std::ffi::OsStr;
+use std::collections::HashSet;
 use std::process::Command;
 
 use anyhow::{anyhow, Result};
@@ -92,6 +93,19 @@ impl Pacman {
             icon_name: None,
         }
     }
+
+    fn list_foreign_names() -> Result<HashSet<String>> {
+        let output = Self::run_capture(["-Qm"])?;
+        let mut names = HashSet::new();
+        for line in output.lines() {
+            let mut parts = line.split_whitespace();
+            let name = parts.next().unwrap_or("").to_string();
+            if !name.is_empty() {
+                names.insert(name);
+            }
+        }
+        Ok(names)
+    }
 }
 
 impl PacmanProvider for Pacman {
@@ -123,6 +137,7 @@ impl PacmanProvider for Pacman {
 
     fn list_installed(&self) -> Result<Vec<PackageSummary>> {
         let output = Self::run_capture(["-Q"])?;
+        let foreign = Self::list_foreign_names().unwrap_or_default();
         let mut results = Vec::new();
         for line in output.lines() {
             let mut parts = line.split_whitespace();
@@ -131,11 +146,16 @@ impl PacmanProvider for Pacman {
             if name.is_empty() {
                 continue;
             }
+            let source = if foreign.contains(&name) {
+                PackageSource::Aur
+            } else {
+                PackageSource::Repo
+            };
             results.push(PackageSummary {
                 name,
                 summary: String::from(""),
                 version,
-                source: PackageSource::Repo,
+                source,
                 installed: true,
                 origin: None,
             });

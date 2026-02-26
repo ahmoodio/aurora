@@ -46,7 +46,7 @@ pub fn show_details(ctx: &AppContext, handles: &UiHandles, summary: PackageSumma
 
     let badges = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     let source_badge = gtk::Label::new(Some(match summary.source {
-        PackageSource::Repo => "Repo",
+        PackageSource::Repo => "Pacman",
         PackageSource::Aur => "AUR",
         PackageSource::Flatpak => "Flatpak",
     }));
@@ -218,7 +218,23 @@ fn load_details(ctx: AppContext, summary: PackageSummary, appstream: Arc<AppStre
                 ctx.pacman.info_repo(&summary.name).unwrap_or_else(|_| fallback_details(&summary))
             }
         }
-        PackageSource::Aur => ctx.aur.info(&summary.name).unwrap_or_else(|_| fallback_details(&summary)),
+        PackageSource::Aur => {
+            if summary.installed {
+                ctx.pacman
+                    .info_installed(&summary.name)
+                    .map(|mut details| {
+                        details.source = PackageSource::Aur;
+                        details.installed = true;
+                        details
+                    })
+                    .or_else(|_| ctx.aur.info(&summary.name))
+                    .unwrap_or_else(|_| fallback_details(&summary))
+            } else {
+                ctx.aur
+                    .info(&summary.name)
+                    .unwrap_or_else(|_| fallback_details(&summary))
+            }
+        }
         PackageSource::Flatpak => ctx
             .flatpak
             .info(&summary.name)

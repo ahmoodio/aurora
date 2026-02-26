@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -391,11 +392,48 @@ fn run_search(query: String, ctx: AppContext, search_page: search::SearchPage, h
     let (tx, rx) = std::sync::mpsc::channel();
     let ctx_thread = ctx.clone();
     std::thread::spawn(move || {
-        let mut results = ctx_thread.pacman.search(&query).unwrap_or_default();
+        let mut pacman_results = ctx_thread.pacman.search(&query).unwrap_or_default();
         let mut aur = ctx_thread.aur.search(&query).unwrap_or_default();
         let mut flatpak = ctx_thread.flatpak.search(&query).unwrap_or_default();
-        results.append(&mut aur);
-        results.append(&mut flatpak);
+
+        let pacman_installed: HashSet<String> = ctx_thread
+            .pacman
+            .list_installed()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|pkg| pkg.name)
+            .collect();
+        let flatpak_installed: HashSet<String> = ctx_thread
+            .flatpak
+            .list_installed()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|pkg| pkg.name)
+            .collect();
+
+        for pkg in &mut pacman_results {
+            pkg.installed = pacman_installed.contains(&pkg.name);
+        }
+        for pkg in &mut aur {
+            pkg.installed = pacman_installed.contains(&pkg.name);
+        }
+        for pkg in &mut flatpak {
+            pkg.installed = flatpak_installed.contains(&pkg.name);
+        }
+
+        let mut dedup: HashMap<(PackageSource, String), crate::core::models::PackageSummary> =
+            HashMap::new();
+        for pkg in pacman_results
+            .into_iter()
+            .chain(aur.into_iter())
+            .chain(flatpak.into_iter())
+        {
+            let key = (pkg.source, pkg.name.clone());
+            dedup.insert(key, pkg);
+        }
+
+        let mut results: Vec<_> = dedup.into_values().collect();
+        results.sort_by(|a, b| a.name.cmp(&b.name));
         let _ = tx.send(results);
     });
 
