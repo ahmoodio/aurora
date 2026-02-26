@@ -98,7 +98,7 @@ fn aur_command(helper: AurHelperKind, op: &str, pkg: &str, noconfirm: &[String],
     args.push("--sudo".to_string());
     args.push("pkexec".to_string());
     args.push("--sudoflags".to_string());
-    args.push(format!("{helper_path} pacman"));
+    args.push(helper_path.to_string());
 
     CommandSpec::new(helper.as_str(), args)
 }

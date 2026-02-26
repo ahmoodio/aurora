@@ -24,6 +24,12 @@ fn run() -> Result<()> {
         return Err(anyhow!("unsupported target: {target}"));
     }
 
+    // Some helper invocations include "pacman" twice:
+    // aurora-helper pacman pacman -S ...
+    if matches!(args.first(), Some(arg) if arg == "pacman") {
+        args.remove(0);
+    }
+
     validate_pacman(&args)?;
 
     let status = Command::new("pacman")
