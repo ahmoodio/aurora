@@ -1,11 +1,20 @@
+use std::sync::mpsc;
+use std::time::Duration;
+
 use gtk::prelude::*;
+use glib::ControlFlow;
 
 use crate::core::cache::find_logo_path;
 use crate::ui::widgets::card;
+use crate::ui::AppContext;
 
 #[derive(Clone)]
 pub struct HomePage {
     pub root: gtk::Box,
+    pub open_search_btn: gtk::Button,
+    pub open_updates_btn: gtk::Button,
+    pub open_installed_btn: gtk::Button,
+    summary_label: gtk::Label,
 }
 
 impl HomePage {
@@ -27,6 +36,22 @@ impl HomePage {
         header.append(&title);
         root.append(&header);
 
+        let summary_label = gtk::Label::new(Some("Loading package summary..."));
+        summary_label.set_xalign(0.0);
+        summary_label.set_wrap(true);
+        summary_label.add_css_class("dim-label");
+        root.append(&summary_label);
+
+        let quick_actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let open_search_btn = gtk::Button::with_label("Browse Packages");
+        let open_updates_btn = gtk::Button::with_label("Open Updates");
+        open_updates_btn.add_css_class("suggested-action");
+        let open_installed_btn = gtk::Button::with_label("View Installed");
+        quick_actions.append(&open_search_btn);
+        quick_actions.append(&open_updates_btn);
+        quick_actions.append(&open_installed_btn);
+        root.append(&quick_actions);
+
         let category_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         for label in ["Graphics", "Development", "Media", "Games", "Utilities"] {
             let chip = gtk::Label::new(Some(label));
@@ -42,8 +67,8 @@ impl HomePage {
 
         let featured = gtk::FlowBox::new();
         featured.set_valign(gtk::Align::Start);
-        featured.set_min_children_per_line(2);
-        featured.set_max_children_per_line(4);
+        featured.set_min_children_per_line(1);
+        featured.set_max_children_per_line(3);
         featured.set_column_spacing(12);
         featured.set_row_spacing(12);
         featured.set_homogeneous(true);
@@ -57,8 +82,8 @@ impl HomePage {
 
         let popular_grid = gtk::FlowBox::new();
         popular_grid.set_valign(gtk::Align::Start);
-        popular_grid.set_min_children_per_line(2);
-        popular_grid.set_max_children_per_line(4);
+        popular_grid.set_min_children_per_line(1);
+        popular_grid.set_max_children_per_line(3);
         popular_grid.set_column_spacing(12);
         popular_grid.set_row_spacing(12);
         popular_grid.set_homogeneous(true);
@@ -81,8 +106,43 @@ impl HomePage {
         );
         featured.insert(&placeholder, -1);
 
-        Self { root }
+        Self {
+            root,
+            open_search_btn,
+            open_updates_btn,
+            open_installed_btn,
+            summary_label,
+        }
     }
+
+    pub fn bind(&self, ctx: AppContext) {
+        refresh_summary(self.summary_label.clone(), ctx.clone());
+        let summary = self.summary_label.clone();
+        glib::timeout_add_local(Duration::from_secs(900), move || {
+            refresh_summary(summary.clone(), ctx.clone());
+            ControlFlow::Continue
+        });
+    }
+}
+
+fn refresh_summary(summary: gtk::Label, ctx: AppContext) {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let pacman_count = ctx.pacman.list_installed().map(|v| v.len()).unwrap_or(0);
+        let flatpak_count = ctx.flatpak.list_installed().map(|v| v.len()).unwrap_or(0);
+        let _ = tx.send((pacman_count, flatpak_count));
+    });
+
+    glib::idle_add_local(move || match rx.try_recv() {
+        Ok((pacman_count, flatpak_count)) => {
+            summary.set_text(&format!(
+                "Installed packages: {pacman_count} (Pacman/AUR), {flatpak_count} Flatpak apps"
+            ));
+            ControlFlow::Break
+        }
+        Err(mpsc::TryRecvError::Empty) => ControlFlow::Continue,
+        Err(mpsc::TryRecvError::Disconnected) => ControlFlow::Break,
+    });
 }
 
 fn logo_image(size: i32) -> gtk::Image {

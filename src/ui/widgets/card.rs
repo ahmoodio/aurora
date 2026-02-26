@@ -14,7 +14,7 @@ where
     root.set_margin_bottom(12);
     root.set_margin_start(12);
     root.set_margin_end(12);
-    root.set_size_request(300, -1);
+    root.set_size_request(260, -1);
     root.set_hexpand(false);
     root.set_vexpand(false);
     root.set_halign(gtk::Align::Start);

@@ -187,12 +187,18 @@ impl QueueController {
             content.append(&row);
         }
 
+        let scroller = gtk::ScrolledWindow::new();
+        scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        scroller.set_min_content_height(180);
+        scroller.set_max_content_height(420);
+        scroller.set_child(Some(&content));
+
         let dialog = adw::MessageDialog::new(
             Some(&self.parent),
             Some("Review Transactions"),
             Some("Confirm before executing."),
         );
-        dialog.set_extra_child(Some(&content));
+        dialog.set_extra_child(Some(&scroller));
         dialog.add_response("cancel", "Cancel");
         dialog.add_response("execute", "Execute");
         dialog.set_response_appearance("execute", adw::ResponseAppearance::Suggested);
@@ -339,6 +345,35 @@ pub fn build_ui(app: &adw::Application) {
 
     setup_css();
 
+    let stack_for_home_search = stack.clone();
+    home_page.open_search_btn.connect_clicked(move |_| {
+        stack_for_home_search.set_visible_child_name("search");
+    });
+
+    let stack_for_home_updates = stack.clone();
+    let updates_for_home = updates_page.clone();
+    let ctx_for_home_updates = ctx.clone();
+    let toasts_for_home_updates = handles.toasts.clone();
+    home_page.open_updates_btn.connect_clicked(move |_| {
+        stack_for_home_updates.set_visible_child_name("updates");
+        updates_for_home.refresh(
+            ctx_for_home_updates.clone(),
+            Some(toasts_for_home_updates.clone()),
+        );
+    });
+
+    let stack_for_home_installed = stack.clone();
+    let installed_for_home = installed_page.clone();
+    let ctx_for_home_installed = ctx.clone();
+    let handles_for_home_installed = handles.clone();
+    home_page.open_installed_btn.connect_clicked(move |_| {
+        stack_for_home_installed.set_visible_child_name("installed");
+        installed_for_home.refresh(
+            ctx_for_home_installed.clone(),
+            handles_for_home_installed.clone(),
+        );
+    });
+
 
     queue_button.connect_clicked(clone!(@strong queue_controller => move |_| {
         queue_controller.show_review_dialog();
@@ -347,8 +382,11 @@ pub fn build_ui(app: &adw::Application) {
     let ctx_for_sidebar = ctx.clone();
     let stack_for_sidebar = stack.clone();
     let handles_for_sidebar = handles.clone();
+    let nav_for_sidebar = nav_view.clone();
+    let main_page_for_sidebar = main_page.clone();
     sidebar.connect_row_selected(move |_, row| {
         if let Some(row) = row {
+            let _ = nav_for_sidebar.pop_to_page(&main_page_for_sidebar);
             let index = row.index();
             match index {
                 0 => stack_for_sidebar.set_visible_child_name("home"),
@@ -375,6 +413,7 @@ pub fn build_ui(app: &adw::Application) {
     updates_page.bind(ctx.clone());
     settings_page.bind(ctx.clone());
     search_page.bind_search(ctx.clone(), handles.clone(), stack.clone());
+    home_page.bind(ctx.clone());
 
     let updates_page_refresh = updates_page.clone();
     let ctx_updates = ctx.clone();

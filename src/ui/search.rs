@@ -55,13 +55,21 @@ impl SearchPage {
 
         let results = gtk::FlowBox::new();
         results.set_valign(gtk::Align::Start);
-        results.set_min_children_per_line(2);
-        results.set_max_children_per_line(4);
+        results.set_min_children_per_line(1);
+        results.set_max_children_per_line(3);
         results.set_column_spacing(12);
         results.set_row_spacing(12);
         results.set_homogeneous(true);
         results.set_selection_mode(gtk::SelectionMode::None);
-        root.append(&results);
+        results.set_hexpand(true);
+        results.set_vexpand(true);
+
+        let scroller = gtk::ScrolledWindow::new();
+        scroller.set_hexpand(true);
+        scroller.set_vexpand(true);
+        scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        scroller.set_child(Some(&results));
+        root.append(&scroller);
 
         Self {
             root,
