@@ -177,9 +177,20 @@ fn build_row(pkg: PackageSummary, handles: &UiHandles, ctx: &AppContext) -> gtk:
     text.append(&version);
     content.append(&text);
 
+    let remove_btn = gtk::Button::with_label("Remove");
+    remove_btn.add_css_class("destructive-action");
+    content.append(&remove_btn);
+
     let details_btn = gtk::Button::with_label("Details");
     content.append(&details_btn);
     row.set_child(Some(&content));
+
+    let queue = handles.queue.clone();
+    let pkg_name = pkg.name.clone();
+    let pkg_source = pkg.source;
+    remove_btn.connect_clicked(move |_| {
+        queue.add_remove(pkg_name.clone(), pkg_source);
+    });
 
     let handles = handles.clone();
     let ctx = ctx.clone();

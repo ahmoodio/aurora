@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
 
+use gtk::gio;
 use gtk::prelude::*;
 use libadwaita as adw;
 use adw::prelude::*;
@@ -65,9 +66,12 @@ pub fn show_details(ctx: &AppContext, handles: &UiHandles, summary: PackageSumma
     action_btn.add_css_class("suggested-action");
     let update_btn = gtk::Button::with_label("Update");
     update_btn.set_visible(summary.installed);
+    let open_home_btn = gtk::Button::with_label("Open Homepage");
+    open_home_btn.set_visible(false);
     let logs_btn = gtk::Button::with_label("View Logs");
     button_row.append(&action_btn);
     button_row.append(&update_btn);
+    button_row.append(&open_home_btn);
     button_row.append(&logs_btn);
 
     let carousel = ScreenshotCarousel::new();
@@ -79,9 +83,14 @@ pub fn show_details(ctx: &AppContext, handles: &UiHandles, summary: PackageSumma
     installed.set_xalign(0.0);
     let size = gtk::Label::new(Some("Size: -"));
     size.set_xalign(0.0);
+    let homepage = gtk::Label::new(Some("Homepage: -"));
+    homepage.set_xalign(0.0);
+    homepage.set_selectable(true);
+    homepage.set_wrap(true);
     details.append(&version);
     details.append(&installed);
     details.append(&size);
+    details.append(&homepage);
 
     let description = gtk::Label::new(Some(""));
     description.set_xalign(0.0);
@@ -113,7 +122,11 @@ pub fn show_details(ctx: &AppContext, handles: &UiHandles, summary: PackageSumma
     let carousel_clone = carousel.clone();
     let action_btn_clone = action_btn.clone();
     let update_btn_clone = update_btn.clone();
+    let open_home_btn_clone = open_home_btn.clone();
+    let homepage_clone = homepage.clone();
     let installed_state_clone = installed_state.clone();
+    let home_url = Rc::new(RefCell::new(None::<String>));
+    let home_url_clone = home_url.clone();
     let appstream = ctx.appstream.clone();
 
     let (tx, rx) = mpsc::channel();
@@ -139,6 +152,15 @@ pub fn show_details(ctx: &AppContext, handles: &UiHandles, summary: PackageSumma
                 update_btn_clone.set_visible(details.installed);
                 if let Some(size) = &details.size {
                     size_clone.set_text(&format!("Size: {size}"));
+                }
+                if let Some(home) = details.home.clone() {
+                    homepage_clone.set_text(&format!("Homepage: {home}"));
+                    *home_url_clone.borrow_mut() = Some(home);
+                    open_home_btn_clone.set_visible(true);
+                } else {
+                    homepage_clone.set_text("Homepage: -");
+                    *home_url_clone.borrow_mut() = None;
+                    open_home_btn_clone.set_visible(false);
                 }
                 description_clone.set_text(&details.description);
                 carousel_clone.set_screenshots(details.screenshots.clone());
@@ -168,6 +190,16 @@ pub fn show_details(ctx: &AppContext, handles: &UiHandles, summary: PackageSumma
     let pkg_origin = summary.origin.clone();
     update_btn.connect_clicked(move |_| {
         queue.add_install(pkg_name.clone(), pkg_source, pkg_origin.clone());
+    });
+
+    let home_url = home_url.clone();
+    let toasts = handles.toasts.clone();
+    open_home_btn.connect_clicked(move |_| {
+        if let Some(url) = home_url.borrow().clone() {
+            if gio::AppInfo::launch_default_for_uri(&url, None::<&gio::AppLaunchContext>).is_err() {
+                toasts.add_toast(adw::Toast::new("Failed to open homepage"));
+            }
+        }
     });
 
     let drawer = handles.log_drawer.clone();

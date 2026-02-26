@@ -13,6 +13,8 @@ use crate::ui::AppContext;
 pub struct UpdatesPage {
     pub root: gtk::Box,
     check_button: gtk::Button,
+    select_all_button: gtk::Button,
+    clear_selection_button: gtk::Button,
     apply_button: gtk::Button,
     apply_selected_button: gtk::Button,
     list: gtk::ListBox,
@@ -54,10 +56,14 @@ impl UpdatesPage {
 
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let check_button = gtk::Button::with_label("Check Updates");
+        let select_all_button = gtk::Button::with_label("Select All");
+        let clear_selection_button = gtk::Button::with_label("Select None");
         let apply_selected_button = gtk::Button::with_label("Update Selected");
         let apply_button = gtk::Button::with_label("Update All");
         apply_selected_button.add_css_class("suggested-action");
         buttons.append(&check_button);
+        buttons.append(&select_all_button);
+        buttons.append(&clear_selection_button);
         buttons.append(&apply_selected_button);
         buttons.append(&apply_button);
         root.append(&buttons);
@@ -72,6 +78,8 @@ impl UpdatesPage {
         Self {
             root,
             check_button,
+            select_all_button,
+            clear_selection_button,
             apply_button,
             apply_selected_button,
             list,
@@ -84,6 +92,20 @@ impl UpdatesPage {
 
     pub fn bind(&self, ctx: AppContext) {
         self.refresh(ctx.clone(), None);
+
+        let rows_for_select_all = self.rows.clone();
+        self.select_all_button.connect_clicked(move |_| {
+            for (check, _, _) in rows_for_select_all.borrow().iter() {
+                check.set_active(true);
+            }
+        });
+
+        let rows_for_clear = self.rows.clone();
+        self.clear_selection_button.connect_clicked(move |_| {
+            for (check, _, _) in rows_for_clear.borrow().iter() {
+                check.set_active(false);
+            }
+        });
 
         let list = self.list.clone();
         let status = self.status.clone();
