@@ -1,4 +1,5 @@
 use std::env;
+use std::fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -20,10 +21,22 @@ fn run() -> Result<()> {
     }
 
     let target = args.remove(0);
-    if target != "pacman" {
-        return Err(anyhow!("unsupported target: {target}"));
+    match target.as_str() {
+        "pacman" => run_pacman(args),
+        "clear-pacman-lock" => clear_pacman_lock(),
+        _ => Err(anyhow!("unsupported target: {target}")),
     }
+}
 
+fn ensure_root() -> Result<()> {
+    let uid = unsafe { libc::geteuid() };
+    if uid != 0 {
+        return Err(anyhow!("must be run as root via pkexec"));
+    }
+    Ok(())
+}
+
+fn run_pacman(mut args: Vec<String>) -> Result<()> {
     // Some helper invocations include "pacman" twice:
     // aurora-helper pacman pacman -S ...
     if matches!(args.first(), Some(arg) if arg == "pacman") {
@@ -40,12 +53,42 @@ fn run() -> Result<()> {
     std::process::exit(status.code().unwrap_or(1));
 }
 
-fn ensure_root() -> Result<()> {
-    let uid = unsafe { libc::geteuid() };
-    if uid != 0 {
-        return Err(anyhow!("must be run as root via pkexec"));
+fn clear_pacman_lock() -> Result<()> {
+    ensure_no_package_manager_running()?;
+
+    let lock_path = "/var/lib/pacman/db.lck";
+    if !Path::new(lock_path).exists() {
+        println!("No pacman lock file present.");
+        return Ok(());
     }
+
+    fs::remove_file(lock_path)?;
+    println!("Removed stale pacman lock: {lock_path}");
     Ok(())
+}
+
+fn ensure_no_package_manager_running() -> Result<()> {
+    let mut running = Vec::new();
+    let candidates = ["pacman", "yay", "paru", "pamac", "pkcon", "packagekitd"];
+
+    for proc_name in candidates {
+        match Command::new("pgrep").arg("-x").arg(proc_name).status() {
+            Ok(status) if status.success() => running.push(proc_name),
+            Ok(_) => {}
+            Err(err) => {
+                return Err(anyhow!("failed to run pgrep safety check: {err}"));
+            }
+        }
+    }
+
+    if running.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "package manager appears active: {}",
+            running.join(", ")
+        ))
+    }
 }
 
 fn validate_pacman(args: &[String]) -> Result<()> {

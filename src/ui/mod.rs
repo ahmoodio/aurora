@@ -506,6 +506,7 @@ fn run_plan(
     let parent = parent.clone();
     let toasts = toasts.clone();
     let prompt_open = Rc::new(RefCell::new(false));
+    let lock_hint_shown = Rc::new(RefCell::new(false));
 
     let next: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
     let next_clone = next.clone();
@@ -535,6 +536,7 @@ fn run_plan(
         let toasts = toasts.clone();
         let parent = parent.clone();
         let prompt_open = prompt_open.clone();
+        let lock_hint_shown = lock_hint_shown.clone();
         glib::idle_add_local(move || match rx.try_recv() {
             Ok(event) => {
                 match event {
@@ -548,7 +550,21 @@ fn run_plan(
                                 prompt_open.clone(),
                             );
                         }
-                        log_drawer.append_line(&line, log_limit)
+                        log_drawer.append_line(&line, log_limit);
+                        if !*lock_hint_shown.borrow() {
+                            let lower = line.to_lowercase();
+                            if lower.contains("unable to lock database")
+                                || lower.contains("could not lock database")
+                                || lower.contains("/var/lib/pacman/db.lck")
+                            {
+                                *lock_hint_shown.borrow_mut() = true;
+                                log_drawer.append_line(
+                                    "Hint: pacman lock detected. If no package manager is running, remove it with: sudo rm -f /var/lib/pacman/db.lck",
+                                    log_limit,
+                                );
+                                toasts.add_toast(adw::Toast::new("Pacman lock file detected"));
+                            }
+                        }
                     }
                     LogEvent::Finished(code) => {
                         if code != 0 {
