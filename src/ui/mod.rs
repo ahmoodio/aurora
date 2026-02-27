@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
+use std::process::Command;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -39,6 +41,7 @@ pub struct AppContext {
     pub settings: Arc<Mutex<Settings>>,
     pub queue: Arc<Mutex<TransactionQueue>>,
     pub runner: Arc<CommandRunner>,
+    pub transaction_in_progress: Arc<Mutex<bool>>,
 }
 
 #[derive(Clone)]
@@ -212,9 +215,11 @@ impl QueueController {
         dialog.connect_response(None, move |d: &adw::MessageDialog, resp| {
             if resp == "execute" {
                 let plan = plan_transactions(&queue, &ctx.settings.lock().unwrap());
-                run_plan(plan, &ctx, &log_drawer, &parent, &toasts);
-                ctx.queue.lock().unwrap().clear();
-                button.set_label("Queue (0)");
+                let started = run_plan(plan, &ctx, &log_drawer, &parent, &toasts);
+                if started {
+                    ctx.queue.lock().unwrap().clear();
+                    button.set_label("Queue (0)");
+                }
             }
             d.close();
         });
@@ -236,6 +241,7 @@ pub fn build_ui(app: &adw::Application) {
         settings: settings_arc,
         queue: Arc::new(Mutex::new(TransactionQueue::default())),
         runner: Arc::new(CommandRunner::default()),
+        transaction_in_progress: Arc::new(Mutex::new(false)),
     };
 
     let window = adw::ApplicationWindow::builder()
@@ -492,9 +498,61 @@ fn run_plan(
     log_drawer: &widgets::log_drawer::LogDrawer,
     parent: &adw::ApplicationWindow,
     toasts: &adw::ToastOverlay,
-) {
+) -> bool {
     if plan.commands.is_empty() {
-        return;
+        return false;
+    }
+
+    {
+        let mut in_progress = ctx.transaction_in_progress.lock().unwrap();
+        if *in_progress {
+            toasts.add_toast(adw::Toast::new(
+                "A transaction is already running. Wait for it to finish.",
+            ));
+            return false;
+        }
+        *in_progress = true;
+    }
+
+    let active_managers = match active_package_managers() {
+        Ok(active) => active,
+        Err(err) => {
+            *ctx.transaction_in_progress.lock().unwrap() = false;
+            toasts.add_toast(adw::Toast::new("Failed to check package manager status"));
+            log_drawer.set_visible(true);
+            log_drawer.append_line(
+                &format!("Failed to check active package managers: {err}"),
+                ctx.runner.log_limit,
+            );
+            return false;
+        }
+    };
+
+    if !active_managers.is_empty() {
+        *ctx.transaction_in_progress.lock().unwrap() = false;
+        toasts.add_toast(adw::Toast::new(
+            "Another package manager process is already running",
+        ));
+        log_drawer.set_visible(true);
+        log_drawer.append_line(
+            &format!(
+                "Refusing to start: active package manager process detected: {}",
+                active_managers.join(", ")
+            ),
+            ctx.runner.log_limit,
+        );
+        return false;
+    }
+
+    if Path::new("/var/lib/pacman/db.lck").exists() {
+        *ctx.transaction_in_progress.lock().unwrap() = false;
+        toasts.add_toast(adw::Toast::new("Pacman lock file present"));
+        log_drawer.set_visible(true);
+        log_drawer.append_line(
+            "Refusing to start because /var/lib/pacman/db.lck exists. Use the Clear Lock button in Logs.",
+            ctx.runner.log_limit,
+        );
+        return false;
     }
 
     log_drawer.clear();
@@ -507,6 +565,7 @@ fn run_plan(
     let toasts = toasts.clone();
     let prompt_open = Rc::new(RefCell::new(false));
     let lock_hint_shown = Rc::new(RefCell::new(false));
+    let in_progress = ctx_clone.transaction_in_progress.clone();
 
     let next: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
     let next_clone = next.clone();
@@ -514,6 +573,7 @@ fn run_plan(
     *next.borrow_mut() = Some(Box::new(move || {
         let mut cmds = commands.borrow_mut();
         if cmds.is_empty() {
+            *in_progress.lock().unwrap() = false;
             let dialog = adw::MessageDialog::new(
                 Some(&parent),
                 Some("Transactions complete"),
@@ -530,13 +590,19 @@ fn run_plan(
         let (input_tx, input_rx) = mpsc::channel();
         let runner = ctx_clone.runner.clone();
         let log_limit = runner.log_limit;
-        let _ = runner.run_streaming(cmd, tx, Some(input_rx));
+        if let Err(err) = runner.run_streaming(cmd, tx, Some(input_rx)) {
+            *in_progress.lock().unwrap() = false;
+            toasts.add_toast(adw::Toast::new("Failed to start command"));
+            log_drawer.append_line(&format!("Failed to start command: {err}"), log_limit);
+            return;
+        }
         let next_inner = next_clone.clone();
         let log_drawer = log_drawer.clone();
         let toasts = toasts.clone();
         let parent = parent.clone();
         let prompt_open = prompt_open.clone();
         let lock_hint_shown = lock_hint_shown.clone();
+        let in_progress = in_progress.clone();
         glib::idle_add_local(move || match rx.try_recv() {
             Ok(event) => {
                 match event {
@@ -568,11 +634,14 @@ fn run_plan(
                     }
                     LogEvent::Finished(code) => {
                         if code != 0 {
+                            *in_progress.lock().unwrap() = false;
                             toasts.add_toast(adw::Toast::new(&format!(
                                 "Command failed ({code})"
                             )));
                         } else if let Some(next) = &*next_inner.borrow() {
                             next();
+                        } else {
+                            *in_progress.lock().unwrap() = false;
                         }
                         return ControlFlow::Break;
                     }
@@ -580,7 +649,10 @@ fn run_plan(
                 ControlFlow::Continue
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => ControlFlow::Continue,
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => ControlFlow::Break,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                *in_progress.lock().unwrap() = false;
+                ControlFlow::Break
+            }
         });
     }) as Box<dyn Fn()>);
 
@@ -590,6 +662,20 @@ fn run_plan(
             next_fn();
         }
     }
+    true
+}
+
+fn active_package_managers() -> Result<Vec<String>, String> {
+    let mut active = Vec::new();
+    let names = ["pacman", "yay", "paru", "pamac", "pkcon", "packagekitd", "aurora-helper"];
+    for name in names {
+        match Command::new("pgrep").arg("-x").arg(name).status() {
+            Ok(status) if status.success() => active.push(name.to_string()),
+            Ok(_) => {}
+            Err(err) => return Err(format!("pgrep failed for {name}: {err}")),
+        }
+    }
+    Ok(active)
 }
 
 fn should_prompt(line: &str) -> bool {
