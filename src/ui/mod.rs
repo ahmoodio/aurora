@@ -378,19 +378,11 @@ pub fn build_ui(app: &adw::Application) {
     toolbar_view.set_content(Some(&split));
     toolbar_view.set_vexpand(true);
 
-    let vertical_split = gtk::Paned::new(gtk::Orientation::Vertical);
-    vertical_split.set_wide_handle(true);
-    vertical_split.set_resize_start_child(true);
-    vertical_split.set_shrink_start_child(false);
-    vertical_split.set_resize_end_child(false);
-    vertical_split.set_shrink_end_child(true);
-    vertical_split.set_start_child(Some(&toolbar_view));
-    vertical_split.set_end_child(Some(log_drawer.widget()));
-
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     root.set_hexpand(true);
     root.set_vexpand(true);
-    root.append(&vertical_split);
+    root.append(&toolbar_view);
+    root.append(log_drawer.widget());
 
     toast_overlay.set_child(Some(&root));
     toast_overlay.set_hexpand(true);

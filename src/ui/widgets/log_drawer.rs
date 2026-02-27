@@ -7,6 +7,10 @@ use gtk::prelude::*;
 use gtk::{gdk, gio};
 
 const DEFAULT_LOG_LIMIT: usize = 1000;
+const DEFAULT_LOG_HEIGHT: i32 = 220;
+const MIN_LOG_HEIGHT: i32 = 72;
+const MAX_LOG_HEIGHT: i32 = 900;
+const LOG_HEADER_HEIGHT: i32 = 56;
 
 #[derive(Clone)]
 pub struct LogDrawer {
@@ -36,6 +40,7 @@ impl LogDrawer {
         let save_btn = gtk::Button::with_label("Save");
         let clear_btn = gtk::Button::with_label("Clear");
         let clear_lock_btn = gtk::Button::with_label("Clear Lock");
+        let resize_btn = gtk::Button::with_label("Resize");
         let shorter_btn = gtk::Button::with_label("Shorter");
         let taller_btn = gtk::Button::with_label("Taller");
 
@@ -47,6 +52,7 @@ impl LogDrawer {
         header.append(&save_btn);
         header.append(&clear_btn);
         header.append(&clear_lock_btn);
+        header.append(&resize_btn);
         header.append(&shorter_btn);
         header.append(&taller_btn);
 
@@ -60,11 +66,12 @@ impl LogDrawer {
         let scroller = gtk::ScrolledWindow::new();
         scroller.set_vexpand(true);
         scroller.set_child(Some(&text_view));
-        scroller.set_min_content_height(220);
+        scroller.set_min_content_height(DEFAULT_LOG_HEIGHT);
 
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.append(&header);
         root.append(&scroller);
+        root.set_height_request(DEFAULT_LOG_HEIGHT + LOG_HEADER_HEIGHT);
         root.set_visible(false);
 
         let lines = Rc::new(RefCell::new(Vec::new()));
@@ -168,49 +175,87 @@ impl LogDrawer {
             }
         });
 
-        let min_height = Rc::new(RefCell::new(220));
-        let expanded_height = Rc::new(RefCell::new(220));
+        let min_height = Rc::new(RefCell::new(DEFAULT_LOG_HEIGHT));
+        let expanded_height = Rc::new(RefCell::new(DEFAULT_LOG_HEIGHT));
         let minimized = Rc::new(RefCell::new(false));
 
         let min_height_shorter = min_height.clone();
         let expanded_height_shorter = expanded_height.clone();
         let scroller_shorter = scroller.clone();
+        let root_shorter = root.clone();
         shorter_btn.connect_clicked(move |_| {
             let mut height = min_height_shorter.borrow_mut();
-            *height = (*height - 40).max(120);
+            *height = (*height - 40).max(MIN_LOG_HEIGHT);
             scroller_shorter.set_min_content_height(*height);
+            root_shorter.set_height_request(*height + LOG_HEADER_HEIGHT);
             *expanded_height_shorter.borrow_mut() = *height;
         });
 
         let min_height_taller = min_height.clone();
         let expanded_height_taller = expanded_height.clone();
         let scroller_taller = scroller.clone();
+        let root_taller = root.clone();
         taller_btn.connect_clicked(move |_| {
             let mut height = min_height_taller.borrow_mut();
-            *height = (*height + 40).min(760);
+            *height = (*height + 40).min(MAX_LOG_HEIGHT);
             scroller_taller.set_min_content_height(*height);
+            root_taller.set_height_request(*height + LOG_HEADER_HEIGHT);
             *expanded_height_taller.borrow_mut() = *height;
         });
+
+        let drag_start_height = Rc::new(RefCell::new(DEFAULT_LOG_HEIGHT));
+        let min_height_drag = min_height.clone();
+        let expanded_height_drag = expanded_height.clone();
+        let minimized_drag = minimized.clone();
+        let scroller_drag = scroller.clone();
+        let root_drag = root.clone();
+        let minimize_btn_drag = minimize_btn.clone();
+        let drag_start_height_begin = drag_start_height.clone();
+        let drag = gtk::GestureDrag::new();
+        drag.connect_drag_begin(move |_, _, _| {
+            *drag_start_height_begin.borrow_mut() = *min_height_drag.borrow();
+        });
+        let min_height_drag_update = min_height.clone();
+        let expanded_height_drag_update = expanded_height_drag.clone();
+        let minimized_drag_update = minimized_drag.clone();
+        let scroller_drag_update = scroller_drag.clone();
+        let root_drag_update = root_drag.clone();
+        let minimize_btn_drag_update = minimize_btn_drag.clone();
+        drag.connect_drag_update(move |_, _, dy| {
+            let start_height = *drag_start_height.borrow();
+            let next = (start_height - dy as i32).clamp(MIN_LOG_HEIGHT, MAX_LOG_HEIGHT);
+            *min_height_drag_update.borrow_mut() = next;
+            scroller_drag_update.set_min_content_height(next);
+            root_drag_update.set_height_request(next + LOG_HEADER_HEIGHT);
+            if next > MIN_LOG_HEIGHT {
+                *expanded_height_drag_update.borrow_mut() = next;
+                *minimized_drag_update.borrow_mut() = false;
+                minimize_btn_drag_update.set_icon_name("pan-down-symbolic");
+            }
+        });
+        resize_btn.add_controller(drag);
 
         let min_height_toggle = min_height.clone();
         let expanded_height_toggle = expanded_height.clone();
         let minimized_toggle = minimized.clone();
         let scroller_toggle = scroller.clone();
+        let root_toggle = root.clone();
         let minimize_btn_toggle = minimize_btn.clone();
         minimize_btn.connect_clicked(move |_| {
-            const COLLAPSED_HEIGHT: i32 = 72;
             let mut is_minimized = minimized_toggle.borrow_mut();
             if *is_minimized {
                 let restore = *expanded_height_toggle.borrow();
                 *min_height_toggle.borrow_mut() = restore;
                 scroller_toggle.set_min_content_height(restore);
+                root_toggle.set_height_request(restore + LOG_HEADER_HEIGHT);
                 minimize_btn_toggle.set_icon_name("pan-down-symbolic");
                 *is_minimized = false;
             } else {
                 let current = *min_height_toggle.borrow();
                 *expanded_height_toggle.borrow_mut() = current;
-                *min_height_toggle.borrow_mut() = COLLAPSED_HEIGHT;
-                scroller_toggle.set_min_content_height(COLLAPSED_HEIGHT);
+                *min_height_toggle.borrow_mut() = MIN_LOG_HEIGHT;
+                scroller_toggle.set_min_content_height(MIN_LOG_HEIGHT);
+                root_toggle.set_height_request(MIN_LOG_HEIGHT + LOG_HEADER_HEIGHT);
                 minimize_btn_toggle.set_icon_name("pan-up-symbolic");
                 *is_minimized = true;
             }
@@ -249,6 +294,7 @@ impl LogDrawer {
         if visible {
             let height = *self.min_height.borrow();
             self.scroller.set_min_content_height(height);
+            self.root.set_height_request(height + LOG_HEADER_HEIGHT);
             self.scroll_to_bottom();
         }
     }
