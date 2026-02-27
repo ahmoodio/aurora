@@ -28,6 +28,7 @@ pub struct UpdatesPage {
 impl UpdatesPage {
     pub fn new() -> Self {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        root.add_css_class("page-root");
         root.set_margin_top(12);
         root.set_margin_bottom(12);
         root.set_margin_start(12);
@@ -43,11 +44,13 @@ impl UpdatesPage {
         let info = gtk::Label::new(Some(
             "Check and apply updates. System upgrades run through the helper.",
         ));
+        info.add_css_class("dim-label");
         info.set_wrap(true);
         info.set_xalign(0.0);
         root.append(&info);
 
         let status = gtk::Label::new(Some("No update data"));
+        status.add_css_class("dim-label");
         status.set_xalign(0.0);
         root.append(&status);
 
@@ -60,6 +63,7 @@ impl UpdatesPage {
         root.append(&source_filter);
 
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        buttons.add_css_class("page-controls");
         let check_button = gtk::Button::with_label("Check Updates");
         let select_all_button = gtk::Button::with_label("Select All");
         let clear_selection_button = gtk::Button::with_label("Select None");
@@ -73,9 +77,19 @@ impl UpdatesPage {
         buttons.append(&apply_button);
         root.append(&buttons);
 
+        let header_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        header_row.add_css_class("table-header");
+        header_row.append(&header_label("", false, 3));
+        header_row.append(&header_label("Package", true, 0));
+        header_row.append(&header_label("Source", false, 10));
+        header_row.append(&header_label("Action", false, 10));
+        root.append(&header_row);
+
         let list = gtk::ListBox::new();
+        list.add_css_class("package-list");
         list.set_selection_mode(gtk::SelectionMode::None);
         let scroller = gtk::ScrolledWindow::new();
+        scroller.add_css_class("content-scroller");
         scroller.set_vexpand(true);
         scroller.set_child(Some(&list));
         root.append(&scroller);
@@ -293,24 +307,69 @@ fn render_updates(
     for (action, display) in filtered {
         let check = gtk::CheckButton::new();
         check.set_active(true);
-        let label = gtk::Label::new(Some(&display));
-        label.set_xalign(0.0);
-        label.set_wrap(true);
+        check.set_margin_end(2);
+
+        let name_col = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        name_col.set_hexpand(true);
+
+        let name = gtk::Label::new(Some(&action.name));
+        name.set_xalign(0.0);
+        name.add_css_class("title-5");
+
+        let detail = gtk::Label::new(Some(&display));
+        detail.set_xalign(0.0);
+        detail.add_css_class("dim-label");
+        detail.add_css_class("table-subtext");
+        detail.set_wrap(true);
+
+        let source_badge = gtk::Label::new(Some(match action.source {
+            PackageSource::Repo => "Pacman",
+            PackageSource::Aur => "AUR",
+            PackageSource::Flatpak => "Flatpak",
+        }));
+        source_badge.add_css_class("pill");
+        source_badge.set_width_chars(9);
+
+        let mode_badge = gtk::Label::new(Some(match action.kind {
+            ActionKind::Install => "Install",
+            ActionKind::Remove => "Remove",
+            ActionKind::Upgrade => "Upgrade",
+        }));
+        mode_badge.add_css_class("pill-secondary");
+        mode_badge.set_width_chars(9);
+
+        name_col.append(&name);
+        name_col.append(&detail);
 
         let row_box = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        row_box.add_css_class("update-row-inner");
         row_box.set_margin_top(6);
         row_box.set_margin_bottom(6);
         row_box.set_margin_start(6);
         row_box.set_margin_end(6);
         row_box.append(&check);
-        row_box.append(&label);
+        row_box.append(&name_col);
+        row_box.append(&source_badge);
+        row_box.append(&mode_badge);
 
         let row = gtk::ListBoxRow::new();
+        row.add_css_class("update-row");
         row.set_child(Some(&row_box));
         list.append(&row);
 
         rows.borrow_mut().push((check, action, display));
     }
+}
+
+fn header_label(text: &str, expand: bool, width_chars: i32) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.add_css_class("table-header-label");
+    label.set_xalign(0.0);
+    label.set_hexpand(expand);
+    if width_chars > 0 {
+        label.set_width_chars(width_chars);
+    }
+    label
 }
 
 fn collect_pacman_updates() -> Vec<(TransactionAction, String)> {

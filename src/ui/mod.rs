@@ -258,24 +258,62 @@ pub fn build_ui(app: &adw::Application) {
     window.set_icon_name(Some("io.github.ahmoodio.aurora"));
 
     let header = adw::HeaderBar::new();
+    header.add_css_class("aurora-header");
 
     let queue_button = gtk::Button::with_label("Queue (0)");
+    queue_button.add_css_class("suggested-action");
+    queue_button.add_css_class("queue-button");
     header.pack_end(&queue_button);
 
     let sidebar = gtk::ListBox::new();
     sidebar.add_css_class("navigation-sidebar");
+    sidebar.add_css_class("aurora-nav");
+    sidebar.set_selection_mode(gtk::SelectionMode::Single);
+    sidebar.set_activate_on_single_click(true);
 
-    let home_row = gtk::Label::new(Some("Home"));
-    let search_row = gtk::Label::new(Some("Search"));
-    let installed_row = gtk::Label::new(Some("Installed"));
-    let updates_row = gtk::Label::new(Some("Updates"));
-    let settings_row = gtk::Label::new(Some("Settings"));
+    sidebar.append(&build_nav_row("go-home-symbolic", "Home"));
+    sidebar.append(&build_nav_row("system-search-symbolic", "Search"));
+    sidebar.append(&build_nav_row("drive-harddisk-symbolic", "Installed"));
+    sidebar.append(&build_nav_row("software-update-available-symbolic", "Updates"));
+    sidebar.append(&build_nav_row("emblem-system-symbolic", "Settings"));
 
-    sidebar.append(&home_row);
-    sidebar.append(&search_row);
-    sidebar.append(&installed_row);
-    sidebar.append(&updates_row);
-    sidebar.append(&settings_row);
+    let sidebar_root = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    sidebar_root.add_css_class("sidebar-root");
+    sidebar_root.set_margin_top(10);
+    sidebar_root.set_margin_bottom(10);
+    sidebar_root.set_margin_start(10);
+    sidebar_root.set_margin_end(10);
+    sidebar_root.set_hexpand(false);
+    sidebar_root.set_vexpand(true);
+
+    let sidebar_brand = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    sidebar_brand.add_css_class("sidebar-brand");
+    let brand_icon = gtk::Image::from_icon_name("io.github.ahmoodio.aurora");
+    brand_icon.set_pixel_size(30);
+    let brand_text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    let brand_title = gtk::Label::new(Some("Aurora"));
+    brand_title.add_css_class("sidebar-brand-title");
+    brand_title.set_xalign(0.0);
+    let brand_subtitle = gtk::Label::new(Some("Package Manager"));
+    brand_subtitle.add_css_class("dim-label");
+    brand_subtitle.add_css_class("sidebar-brand-subtitle");
+    brand_subtitle.set_xalign(0.0);
+    brand_text.append(&brand_title);
+    brand_text.append(&brand_subtitle);
+    sidebar_brand.append(&brand_icon);
+    sidebar_brand.append(&brand_text);
+
+    let sidebar_hint = gtk::Label::new(Some("One transaction at a time"));
+    sidebar_hint.add_css_class("dim-label");
+    sidebar_hint.add_css_class("sidebar-hint");
+    sidebar_hint.set_wrap(true);
+    sidebar_hint.set_xalign(0.0);
+
+    sidebar_root.append(&sidebar_brand);
+    sidebar_root.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+    sidebar_root.append(&sidebar);
+    sidebar_root.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+    sidebar_root.append(&sidebar_hint);
 
     let stack = gtk::Stack::new();
     stack.set_hexpand(true);
@@ -306,7 +344,7 @@ pub fn build_ui(app: &adw::Application) {
     split.set_vexpand(true);
     let sidebar_page = adw::NavigationPage::builder()
         .title("Navigation")
-        .child(&sidebar)
+        .child(&sidebar_root)
         .build();
     let content_page = adw::NavigationPage::builder()
         .title("Content")
@@ -314,6 +352,7 @@ pub fn build_ui(app: &adw::Application) {
         .build();
     split.set_sidebar(Some(&sidebar_page));
     split.set_content(Some(&content_page));
+    sidebar.select_row(sidebar.row_at_index(0).as_ref());
 
     let log_drawer = widgets::log_drawer::LogDrawer::new();
     let toast_overlay = adw::ToastOverlay::new();
@@ -334,6 +373,7 @@ pub fn build_ui(app: &adw::Application) {
     };
 
     let toolbar_view = adw::ToolbarView::new();
+    toolbar_view.add_css_class("aurora-toolbar");
     toolbar_view.add_top_bar(&header);
     toolbar_view.set_content(Some(&split));
     toolbar_view.set_vexpand(true);
@@ -750,17 +790,132 @@ fn setup_css() {
     let provider = gtk::CssProvider::new();
     provider.load_from_data(
         "
+        .aurora-toolbar {\n\
+            background-image: linear-gradient(135deg, rgba(6, 20, 44, 0.96), rgba(11, 31, 61, 0.96));\n\
+        }\n\
+        .aurora-header {\n\
+            background-color: rgba(7, 18, 36, 0.86);\n\
+            border-bottom: 1px solid rgba(90, 130, 190, 0.18);\n\
+            box-shadow: inset 0 -1px rgba(255, 255, 255, 0.04);\n\
+        }\n\
+        .sidebar-root {\n\
+            background-image: linear-gradient(180deg, rgba(9, 24, 48, 0.95), rgba(6, 19, 38, 0.95));\n\
+            border: 1px solid rgba(96, 138, 210, 0.24);\n\
+            border-radius: 14px;\n\
+        }\n\
+        .sidebar-brand {\n\
+            padding: 4px 2px;\n\
+        }\n\
+        .sidebar-brand-title {\n\
+            font-weight: 700;\n\
+            letter-spacing: 0.2px;\n\
+        }\n\
+        .sidebar-brand-subtitle {\n\
+            font-size: 11px;\n\
+        }\n\
+        .sidebar-hint {\n\
+            font-size: 11px;\n\
+            padding: 2px 4px;\n\
+        }\n\
+        .aurora-nav {\n\
+            background: transparent;\n\
+            border: none;\n\
+        }\n\
+        .aurora-nav row {\n\
+            margin: 2px 0;\n\
+            border-radius: 10px;\n\
+            min-height: 40px;\n\
+            transition: all 180ms ease;\n\
+        }\n\
+        .aurora-nav row:selected {\n\
+            background-image: linear-gradient(135deg, #1673ff, #2f9bff);\n\
+            color: #ffffff;\n\
+            box-shadow: 0 6px 18px rgba(9, 89, 221, 0.28);\n\
+        }\n\
+        .nav-row {\n\
+            padding: 8px 10px;\n\
+        }\n\
+        .nav-label {\n\
+            font-weight: 600;\n\
+            letter-spacing: 0.15px;\n\
+        }\n\
+        .queue-button {\n\
+            font-weight: 700;\n\
+            padding: 6px 14px;\n\
+            border-radius: 10px;\n\
+        }\n\
         .card {\n\
-            background: @window_bg_color;\n\
+            background-image: linear-gradient(170deg, rgba(18, 37, 69, 0.94), rgba(12, 28, 54, 0.92));\n\
+            border-radius: 14px;\n\
+            border: 1px solid rgba(92, 128, 191, 0.28);\n\
+            box-shadow: 0 8px 22px rgba(1, 8, 18, 0.30);\n\
+            padding: 14px;\n\
+        }\n\
+        .package-card {\n\
+            min-height: 248px;\n\
+        }\n\
+        .page-root {\n\
+            background-color: rgba(8, 22, 43, 0.45);\n\
             border-radius: 12px;\n\
-            border: 1px solid @borders;\n\
-            padding: 12px;\n\
+            padding: 8px;\n\
+        }\n\
+        .page-controls {\n\
+            padding: 4px 0;\n\
+        }\n\
+        .table-header {\n\
+            padding: 2px 8px;\n\
+            border-radius: 10px;\n\
+            background-color: rgba(11, 30, 57, 0.78);\n\
+            border: 1px solid rgba(96, 132, 190, 0.18);\n\
+        }\n\
+        .table-header-label {\n\
+            color: rgba(191, 208, 233, 0.88);\n\
+            font-weight: 700;\n\
+            letter-spacing: 0.4px;\n\
+            font-size: 11px;\n\
+            text-transform: uppercase;\n\
+        }\n\
+        .table-subtext {\n\
+            font-size: 11px;\n\
+            opacity: 0.88;\n\
+        }\n\
+        .content-scroller {\n\
+            border: 1px solid rgba(96, 132, 190, 0.20);\n\
+            border-radius: 12px;\n\
+            background-color: rgba(6, 18, 36, 0.42);\n\
+        }\n\
+        .package-row,\n\
+        .update-row {\n\
+            border-radius: 10px;\n\
+            margin: 4px 6px;\n\
+            border: 1px solid rgba(97, 134, 198, 0.22);\n\
+            background-color: rgba(13, 29, 56, 0.74);\n\
+        }\n\
+        .package-row:hover,\n\
+        .update-row:hover {\n\
+            background-color: rgba(18, 40, 74, 0.84);\n\
+        }\n\
+        .package-row-inner,\n\
+        .update-row-inner {\n\
+            padding: 8px 10px;\n\
         }\n\
         .pill {\n\
-            background: @accent_bg_color;\n\
-            color: @accent_fg_color;\n\
+            background-image: linear-gradient(135deg, rgba(35, 96, 255, 0.95), rgba(29, 145, 255, 0.95));\n\
+            color: #f5f9ff;\n\
             border-radius: 999px;\n\
-            padding: 2px 8px;\n\
+            padding: 2px 9px;\n\
+            font-weight: 700;\n\
+            letter-spacing: 0.2px;\n\
+            font-size: 11px;\n\
+        }\n\
+        .pill-secondary {\n\
+            background-image: linear-gradient(135deg, rgba(31, 189, 118, 0.92), rgba(67, 210, 165, 0.92));\n\
+            color: #0b2018;\n\
+            border-radius: 999px;\n\
+            padding: 2px 9px;\n\
+            font-weight: 700;\n\
+            font-size: 11px;\n\
+            letter-spacing: 0.2px;\n\
         }\n\
         .dim-label {\n\
             color: @dim_label_color;\n\
@@ -772,6 +927,25 @@ fn setup_css() {
         &provider,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
+}
+
+fn build_nav_row(icon_name: &str, title: &str) -> gtk::ListBoxRow {
+    let row = gtk::ListBoxRow::new();
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    content.add_css_class("nav-row");
+
+    let icon = gtk::Image::from_icon_name(icon_name);
+    icon.set_pixel_size(18);
+
+    let label = gtk::Label::new(Some(title));
+    label.add_css_class("nav-label");
+    label.set_xalign(0.0);
+    label.set_hexpand(true);
+
+    content.append(&icon);
+    content.append(&label);
+    row.set_child(Some(&content));
+    row
 }
 
 fn apply_theme(theme: ThemeMode) {

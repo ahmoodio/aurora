@@ -21,6 +21,7 @@ pub struct SearchPage {
 impl SearchPage {
     pub fn new() -> Self {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        root.add_css_class("page-root");
         root.set_margin_top(12);
         root.set_margin_bottom(12);
         root.set_margin_start(12);
@@ -34,6 +35,7 @@ impl SearchPage {
         root.append(&title);
 
         let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        controls.add_css_class("page-controls");
         let entry = gtk::SearchEntry::new();
         entry.set_placeholder_text(Some("Search packages"));
         entry.set_hexpand(true);
@@ -65,6 +67,7 @@ impl SearchPage {
         results.set_vexpand(true);
 
         let scroller = gtk::ScrolledWindow::new();
+        scroller.add_css_class("content-scroller");
         scroller.set_hexpand(true);
         scroller.set_vexpand(true);
         scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);

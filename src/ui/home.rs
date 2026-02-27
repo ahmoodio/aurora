@@ -20,6 +20,7 @@ pub struct HomePage {
 impl HomePage {
     pub fn new() -> Self {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        root.add_css_class("page-root");
         root.set_margin_top(12);
         root.set_margin_bottom(12);
         root.set_margin_start(12);
@@ -43,6 +44,7 @@ impl HomePage {
         root.append(&summary_label);
 
         let quick_actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        quick_actions.add_css_class("page-controls");
         let open_search_btn = gtk::Button::with_label("Browse Packages");
         let open_updates_btn = gtk::Button::with_label("Open Updates");
         open_updates_btn.add_css_class("suggested-action");

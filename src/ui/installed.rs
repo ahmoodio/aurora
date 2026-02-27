@@ -23,6 +23,7 @@ pub struct InstalledPage {
 impl InstalledPage {
     pub fn new() -> Self {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        root.add_css_class("page-root");
         root.set_margin_top(12);
         root.set_margin_bottom(12);
         root.set_margin_start(12);
@@ -36,6 +37,7 @@ impl InstalledPage {
         root.append(&title);
 
         let controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        controls.add_css_class("page-controls");
         let search = gtk::SearchEntry::new();
         search.set_placeholder_text(Some("Search installed packages"));
         search.set_hexpand(true);
@@ -54,10 +56,21 @@ impl InstalledPage {
         controls.append(&refresh_button);
         root.append(&controls);
 
+        let header_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        header_row.add_css_class("table-header");
+        header_row.append(&header_label("Package", true, 0));
+        header_row.append(&header_label("Version", false, 16));
+        header_row.append(&header_label("Source", false, 10));
+        header_row.append(&header_label("Status", false, 10));
+        header_row.append(&header_label("Actions", false, 12));
+        root.append(&header_row);
+
         let list = gtk::ListBox::new();
+        list.add_css_class("package-list");
         list.set_selection_mode(gtk::SelectionMode::None);
 
         let scroller = gtk::ScrolledWindow::new();
+        scroller.add_css_class("content-scroller");
         scroller.set_vexpand(true);
         scroller.set_child(Some(&list));
 
@@ -159,30 +172,52 @@ impl InstalledPage {
 
 fn build_row(pkg: PackageSummary, handles: &UiHandles, ctx: &AppContext) -> gtk::ListBoxRow {
     let row = gtk::ListBoxRow::new();
+    row.add_css_class("package-row");
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    content.add_css_class("package-row-inner");
     content.set_margin_top(8);
     content.set_margin_bottom(8);
     content.set_margin_start(8);
     content.set_margin_end(8);
 
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let name_col = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    name_col.set_hexpand(true);
     let name = gtk::Label::new(Some(&pkg.name));
     name.add_css_class("title-4");
     name.set_xalign(0.0);
+    name_col.append(&name);
+    content.append(&name_col);
 
     let version = gtk::Label::new(Some(&pkg.version));
+    version.add_css_class("dim-label");
     version.set_xalign(0.0);
+    version.set_width_chars(16);
+    content.append(&version);
 
-    text.append(&name);
-    text.append(&version);
-    content.append(&text);
+    let source_badge = gtk::Label::new(Some(match pkg.source {
+        crate::core::models::PackageSource::Repo => "Pacman",
+        crate::core::models::PackageSource::Aur => "AUR",
+        crate::core::models::PackageSource::Flatpak => "Flatpak",
+    }));
+    source_badge.add_css_class("pill");
+    source_badge.set_width_chars(9);
+    content.append(&source_badge);
 
+    let status_badge = gtk::Label::new(Some("Installed"));
+    status_badge.add_css_class("pill-secondary");
+    status_badge.set_width_chars(9);
+    content.append(&status_badge);
+
+    let actions = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    actions.set_width_request(170);
+    let details_btn = gtk::Button::with_label("Details");
+    details_btn.add_css_class("flat");
     let remove_btn = gtk::Button::with_label("Remove");
     remove_btn.add_css_class("destructive-action");
-    content.append(&remove_btn);
+    actions.append(&details_btn);
+    actions.append(&remove_btn);
+    content.append(&actions);
 
-    let details_btn = gtk::Button::with_label("Details");
-    content.append(&details_btn);
     row.set_child(Some(&content));
 
     let queue = handles.queue.clone();
@@ -199,6 +234,17 @@ fn build_row(pkg: PackageSummary, handles: &UiHandles, ctx: &AppContext) -> gtk:
     });
 
     row
+}
+
+fn header_label(text: &str, expand: bool, width_chars: i32) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.add_css_class("table-header-label");
+    label.set_xalign(0.0);
+    label.set_hexpand(expand);
+    if width_chars > 0 {
+        label.set_width_chars(width_chars);
+    }
+    label
 }
 
 fn render_list(
