@@ -11,10 +11,11 @@ const DEFAULT_LOG_LIMIT: usize = 1000;
 #[derive(Clone)]
 pub struct LogDrawer {
     root: gtk::Box,
-    body_revealer: gtk::Revealer,
+    scroller: gtk::ScrolledWindow,
     buffer: gtk::TextBuffer,
     text_view: gtk::TextView,
     lines: Rc<RefCell<Vec<String>>>,
+    min_height: Rc<RefCell<i32>>,
 }
 
 impl LogDrawer {
@@ -59,19 +60,11 @@ impl LogDrawer {
         let scroller = gtk::ScrolledWindow::new();
         scroller.set_vexpand(true);
         scroller.set_child(Some(&text_view));
-        scroller.set_min_content_height(200);
-
-        let body = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        body.append(&scroller);
-
-        let body_revealer = gtk::Revealer::new();
-        body_revealer.set_transition_type(gtk::RevealerTransitionType::SlideUp);
-        body_revealer.set_reveal_child(true);
-        body_revealer.set_child(Some(&body));
+        scroller.set_min_content_height(220);
 
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.append(&header);
-        root.append(&body_revealer);
+        root.append(&scroller);
         root.set_visible(false);
 
         let lines = Rc::new(RefCell::new(Vec::new()));
@@ -175,28 +168,52 @@ impl LogDrawer {
             }
         });
 
-        let min_height = Rc::new(RefCell::new(200));
+        let min_height = Rc::new(RefCell::new(220));
+        let expanded_height = Rc::new(RefCell::new(220));
+        let minimized = Rc::new(RefCell::new(false));
 
         let min_height_shorter = min_height.clone();
+        let expanded_height_shorter = expanded_height.clone();
         let scroller_shorter = scroller.clone();
         shorter_btn.connect_clicked(move |_| {
             let mut height = min_height_shorter.borrow_mut();
             *height = (*height - 40).max(120);
             scroller_shorter.set_min_content_height(*height);
+            *expanded_height_shorter.borrow_mut() = *height;
         });
 
         let min_height_taller = min_height.clone();
+        let expanded_height_taller = expanded_height.clone();
         let scroller_taller = scroller.clone();
         taller_btn.connect_clicked(move |_| {
             let mut height = min_height_taller.borrow_mut();
-            *height = (*height + 40).min(520);
+            *height = (*height + 40).min(760);
             scroller_taller.set_min_content_height(*height);
+            *expanded_height_taller.borrow_mut() = *height;
         });
 
-        let body_toggle = body_revealer.clone();
+        let min_height_toggle = min_height.clone();
+        let expanded_height_toggle = expanded_height.clone();
+        let minimized_toggle = minimized.clone();
+        let scroller_toggle = scroller.clone();
+        let minimize_btn_toggle = minimize_btn.clone();
         minimize_btn.connect_clicked(move |_| {
-            let next = !body_toggle.reveals_child();
-            body_toggle.set_reveal_child(next);
+            const COLLAPSED_HEIGHT: i32 = 72;
+            let mut is_minimized = minimized_toggle.borrow_mut();
+            if *is_minimized {
+                let restore = *expanded_height_toggle.borrow();
+                *min_height_toggle.borrow_mut() = restore;
+                scroller_toggle.set_min_content_height(restore);
+                minimize_btn_toggle.set_icon_name("pan-down-symbolic");
+                *is_minimized = false;
+            } else {
+                let current = *min_height_toggle.borrow();
+                *expanded_height_toggle.borrow_mut() = current;
+                *min_height_toggle.borrow_mut() = COLLAPSED_HEIGHT;
+                scroller_toggle.set_min_content_height(COLLAPSED_HEIGHT);
+                minimize_btn_toggle.set_icon_name("pan-up-symbolic");
+                *is_minimized = true;
+            }
         });
 
         let root_hide = root.clone();
@@ -206,10 +223,11 @@ impl LogDrawer {
 
         Self {
             root,
-            body_revealer,
+            scroller,
             buffer,
             text_view,
             lines,
+            min_height,
         }
     }
 
@@ -229,7 +247,8 @@ impl LogDrawer {
     pub fn set_visible(&self, visible: bool) {
         self.root.set_visible(visible);
         if visible {
-            self.body_revealer.set_reveal_child(true);
+            let height = *self.min_height.borrow();
+            self.scroller.set_min_content_height(height);
             self.scroll_to_bottom();
         }
     }
