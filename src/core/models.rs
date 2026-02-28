@@ -146,12 +146,91 @@ impl ThemeMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TerminalMode {
+    Integrated,
+    External,
+}
+
+impl TerminalMode {
+    pub fn all() -> &'static [TerminalMode] {
+        static MODES: [TerminalMode; 2] = [TerminalMode::Integrated, TerminalMode::External];
+        &MODES
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TerminalMode::Integrated => "Integrated Logs",
+            TerminalMode::External => "External Terminal",
+        }
+    }
+
+    pub fn to_index(self) -> u32 {
+        Self::all()
+            .iter()
+            .position(|candidate| *candidate == self)
+            .unwrap_or(0) as u32
+    }
+
+    pub fn from_index(index: u32) -> TerminalMode {
+        Self::all()
+            .get(index as usize)
+            .copied()
+            .unwrap_or(TerminalMode::Integrated)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TerminalEmulator {
+    Auto,
+    Kitty,
+    Konsole,
+    Alacritty,
+}
+
+impl TerminalEmulator {
+    pub fn all() -> &'static [TerminalEmulator] {
+        static EMULATORS: [TerminalEmulator; 4] = [
+            TerminalEmulator::Auto,
+            TerminalEmulator::Kitty,
+            TerminalEmulator::Konsole,
+            TerminalEmulator::Alacritty,
+        ];
+        &EMULATORS
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TerminalEmulator::Auto => "Auto",
+            TerminalEmulator::Kitty => "Kitty",
+            TerminalEmulator::Konsole => "Konsole",
+            TerminalEmulator::Alacritty => "Alacritty",
+        }
+    }
+
+    pub fn to_index(self) -> u32 {
+        Self::all()
+            .iter()
+            .position(|candidate| *candidate == self)
+            .unwrap_or(0) as u32
+    }
+
+    pub fn from_index(index: u32) -> TerminalEmulator {
+        Self::all()
+            .get(index as usize)
+            .copied()
+            .unwrap_or(TerminalEmulator::Auto)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub aur_helper: AurHelperKind,
     pub allow_noconfirm: bool,
     pub theme: ThemeMode,
+    pub terminal_mode: TerminalMode,
+    pub terminal_emulator: TerminalEmulator,
 }
 
 impl Default for Settings {
@@ -160,6 +239,8 @@ impl Default for Settings {
             aur_helper: AurHelperKind::Yay,
             allow_noconfirm: false,
             theme: ThemeMode::System,
+            terminal_mode: TerminalMode::Integrated,
+            terminal_emulator: TerminalEmulator::Auto,
         }
     }
 }

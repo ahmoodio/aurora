@@ -3,13 +3,15 @@ use libadwaita as adw;
 use adw::prelude::*;
 
 use crate::core::cache::{clear_screenshots_cache, save_settings};
-use crate::core::models::{AurHelperKind, ThemeMode};
+use crate::core::models::{AurHelperKind, TerminalEmulator, TerminalMode, ThemeMode};
 use crate::ui::{apply_theme, AppContext};
 
 #[derive(Clone)]
 pub struct SettingsPage {
     pub root: adw::PreferencesPage,
     theme_row: adw::ComboRow,
+    terminal_mode_row: adw::ComboRow,
+    terminal_emulator_row: adw::ComboRow,
     helper_row: adw::ComboRow,
     noconfirm_row: adw::SwitchRow,
     clear_cache: gtk::Button,
@@ -33,6 +35,28 @@ impl SettingsPage {
         theme_row.set_title("Theme");
         theme_row.set_model(Some(&theme_list));
         appearance_group.add(&theme_row);
+
+        let terminal_mode_labels = TerminalMode::all()
+            .iter()
+            .map(|mode| mode.label())
+            .collect::<Vec<_>>();
+        let terminal_mode_list = gtk::StringList::new(&terminal_mode_labels);
+        let terminal_mode_row = adw::ComboRow::new();
+        terminal_mode_row.set_title("Command Output");
+        terminal_mode_row.set_subtitle("Integrated logs or external terminal window");
+        terminal_mode_row.set_model(Some(&terminal_mode_list));
+        appearance_group.add(&terminal_mode_row);
+
+        let terminal_emulator_labels = TerminalEmulator::all()
+            .iter()
+            .map(|terminal| terminal.label())
+            .collect::<Vec<_>>();
+        let terminal_emulator_list = gtk::StringList::new(&terminal_emulator_labels);
+        let terminal_emulator_row = adw::ComboRow::new();
+        terminal_emulator_row.set_title("Terminal Emulator");
+        terminal_emulator_row.set_subtitle("Used when Command Output is External Terminal");
+        terminal_emulator_row.set_model(Some(&terminal_emulator_list));
+        appearance_group.add(&terminal_emulator_row);
 
         let group = adw::PreferencesGroup::new();
         group.set_title("General");
@@ -75,6 +99,8 @@ impl SettingsPage {
         Self {
             root,
             theme_row,
+            terminal_mode_row,
+            terminal_emulator_row,
             helper_row,
             noconfirm_row,
             clear_cache,
@@ -85,6 +111,12 @@ impl SettingsPage {
     pub fn bind(&self, ctx: AppContext) {
         let settings = ctx.settings.lock().unwrap().clone();
         self.theme_row.set_selected(settings.theme.to_index());
+        self.terminal_mode_row
+            .set_selected(settings.terminal_mode.to_index());
+        self.terminal_emulator_row
+            .set_selected(settings.terminal_emulator.to_index());
+        self.terminal_emulator_row
+            .set_sensitive(settings.terminal_mode == TerminalMode::External);
         match settings.aur_helper {
             AurHelperKind::Yay => self.helper_row.set_selected(0),
             AurHelperKind::Paru => self.helper_row.set_selected(1),
@@ -98,6 +130,27 @@ impl SettingsPage {
                 let mut settings = ctx_clone.settings.lock().unwrap();
                 settings.theme = ThemeMode::from_index(selected);
                 apply_theme(settings.theme);
+                let _ = save_settings(&settings);
+            });
+
+        let ctx_clone = ctx.clone();
+        let terminal_emulator_row = self.terminal_emulator_row.clone();
+        self.terminal_mode_row
+            .connect_selected_notify(move |row: &adw::ComboRow| {
+                let selected = row.selected();
+                let mode = TerminalMode::from_index(selected);
+                terminal_emulator_row.set_sensitive(mode == TerminalMode::External);
+                let mut settings = ctx_clone.settings.lock().unwrap();
+                settings.terminal_mode = mode;
+                let _ = save_settings(&settings);
+            });
+
+        let ctx_clone = ctx.clone();
+        self.terminal_emulator_row
+            .connect_selected_notify(move |row: &adw::ComboRow| {
+                let selected = row.selected();
+                let mut settings = ctx_clone.settings.lock().unwrap();
+                settings.terminal_emulator = TerminalEmulator::from_index(selected);
                 let _ = save_settings(&settings);
             });
 

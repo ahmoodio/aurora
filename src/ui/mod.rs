@@ -16,7 +16,10 @@ use adw::prelude::*;
 
 use crate::core::appstream::AppStreamClient;
 use crate::core::cache::{ensure_cache_dirs, load_settings};
-use crate::core::models::{ActionKind, PackageSource, Settings, ThemeMode, TransactionAction, TransactionQueue};
+use crate::core::models::{
+    ActionKind, PackageSource, Settings, TerminalMode, ThemeMode, TransactionAction,
+    TransactionQueue,
+};
 use crate::core::providers::aur::Aur;
 use crate::core::providers::flatpak::Flatpak;
 use crate::core::providers::pacman::Pacman;
@@ -639,11 +642,33 @@ fn run_plan(
             return;
         }
         let cmd = cmds.remove(0);
+        let command_trace = format!("$ {}", cmd.display_line());
         let (tx, rx) = mpsc::channel();
         let (input_tx, input_rx) = mpsc::channel();
         let runner = ctx_clone.runner.clone();
         let log_limit = runner.log_limit;
-        if let Err(err) = runner.run_streaming(cmd, tx, Some(input_rx)) {
+        log_drawer.append_line(&command_trace, log_limit);
+
+        let (terminal_mode, terminal_emulator) = {
+            let settings = ctx_clone.settings.lock().unwrap();
+            (settings.terminal_mode, settings.terminal_emulator)
+        };
+
+        let start_result = match terminal_mode {
+            TerminalMode::External => {
+                log_drawer.append_line(
+                    &format!(
+                        "Launching command in external terminal ({})",
+                        terminal_emulator.label()
+                    ),
+                    log_limit,
+                );
+                runner.run_external_terminal(cmd, terminal_emulator, tx)
+            }
+            TerminalMode::Integrated => runner.run_streaming(cmd, tx, Some(input_rx)),
+        };
+
+        if let Err(err) = start_result {
             *in_progress.lock().unwrap() = false;
             toasts.add_toast(adw::Toast::new("Failed to start command"));
             log_drawer.append_line(&format!("Failed to start command: {err}"), log_limit);
@@ -656,11 +681,12 @@ fn run_plan(
         let prompt_open = prompt_open.clone();
         let lock_hint_shown = lock_hint_shown.clone();
         let in_progress = in_progress.clone();
+        let allow_prompt_dialog = terminal_mode == TerminalMode::Integrated;
         glib::idle_add_local(move || match rx.try_recv() {
             Ok(event) => {
                 match event {
                     LogEvent::Line(line) => {
-                        if should_prompt(&line) && !*prompt_open.borrow() {
+                        if allow_prompt_dialog && should_prompt(&line) && !*prompt_open.borrow() {
                             *prompt_open.borrow_mut() = true;
                             show_prompt_dialog(
                                 &parent,
