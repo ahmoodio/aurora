@@ -43,6 +43,10 @@ fn run_pacman(mut args: Vec<String>) -> Result<()> {
         args.remove(0);
     }
 
+    // yay/paru may include a standalone end-of-options separator before package targets.
+    // pacman does not need it for normal package names, so drop it to simplify validation.
+    args.retain(|arg| arg != "--");
+
     validate_pacman(&args)?;
 
     let status = Command::new("pacman")
