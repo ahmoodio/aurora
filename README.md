@@ -145,12 +145,18 @@ Using your favorite AUR helper:
 
 ```bash
 yay -S aurora-gui-git
-````
+```
 
 or
 
 ```bash
 paru -S aurora-gui-git
+```
+
+Prebuilt package (no local Rust build):
+
+```bash
+yay -S aurora-gui-bin
 ```
 
 ---
@@ -165,6 +171,21 @@ cargo build --release
 ```
 
 > ⚠️ Manual builds do **not** install polkit rules or desktop files.
+
+### Release tags for `aurora-gui-bin`
+
+`aurora-gui-bin` uses GitHub release assets from this repo.  
+When you push a tag like `v0.1.1`, CI builds and uploads:
+
+- `aurora-linux-x86_64.tar.gz`
+- `aurora-linux-x86_64.tar.gz.sha256`
+
+Example:
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
 
 ---
 
@@ -216,7 +237,6 @@ If Aurora helps you:
 * 🐞 Report issues
 * 💡 Suggest features
 * 🔧 Open pull requests
-
 
 
 
