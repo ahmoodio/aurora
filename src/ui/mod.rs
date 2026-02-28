@@ -394,13 +394,19 @@ pub fn build_ui(app: &adw::Application) {
     toolbar_view.set_content(Some(&split));
     toolbar_view.set_vexpand(true);
 
-    let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    root.set_hexpand(true);
-    root.set_vexpand(true);
-    root.append(&toolbar_view);
-    root.append(log_drawer.widget());
+    let content_overlay = gtk::Overlay::new();
+    content_overlay.set_hexpand(true);
+    content_overlay.set_vexpand(true);
+    content_overlay.set_child(Some(&toolbar_view));
 
-    toast_overlay.set_child(Some(&root));
+    let log_widget = log_drawer.widget().clone();
+    log_widget.set_hexpand(true);
+    log_widget.set_halign(gtk::Align::Fill);
+    log_widget.set_valign(gtk::Align::End);
+    content_overlay.add_overlay(&log_widget);
+    content_overlay.set_measure_overlay(&log_widget, false);
+
+    toast_overlay.set_child(Some(&content_overlay));
     toast_overlay.set_hexpand(true);
     toast_overlay.set_vexpand(true);
     window.set_content(Some(&toast_overlay));
