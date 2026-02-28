@@ -1181,6 +1181,18 @@ fn themed_css(theme: ThemeMode) -> String {
             font-size: 11px;
             letter-spacing: 0.2px;
         }
+        .log-resize-handle {
+            min-height: 10px;
+            padding: 0;
+            margin: 0;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            border-bottom: 1px solid $TABLE_HEADER_BORDER$;
+            background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04));
+        }
+        .log-resize-handle:hover {
+            background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+        }
         .dim-label {
             color: @dim_label_color;
         }

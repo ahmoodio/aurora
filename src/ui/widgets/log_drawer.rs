@@ -10,8 +10,9 @@ const DEFAULT_LOG_LIMIT: usize = 1000;
 const DEFAULT_LOG_HEIGHT: i32 = 320;
 const MIN_LOG_HEIGHT: i32 = 72;
 const MAX_LOG_HEIGHT: i32 = 900;
+const LOG_RESIZE_HANDLE_HEIGHT: i32 = 10;
 const LOG_HEADER_HEIGHT: i32 = 56;
-const LOG_CHROME_HEIGHT: i32 = LOG_HEADER_HEIGHT;
+const LOG_CHROME_HEIGHT: i32 = LOG_HEADER_HEIGHT + LOG_RESIZE_HANDLE_HEIGHT;
 
 #[derive(Clone)]
 pub struct LogDrawer {
@@ -66,11 +67,18 @@ impl LogDrawer {
         scroller.set_height_request(DEFAULT_LOG_HEIGHT);
         scroller.set_size_request(-1, DEFAULT_LOG_HEIGHT);
 
+        let resize_handle = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        resize_handle.add_css_class("log-resize-handle");
+        resize_handle.set_height_request(LOG_RESIZE_HANDLE_HEIGHT);
+        resize_handle.set_hexpand(true);
+        resize_handle.set_cursor_from_name(Some("ns-resize"));
+
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.set_vexpand(false);
         root.set_hexpand(true);
         root.set_halign(gtk::Align::Fill);
         root.set_valign(gtk::Align::End);
+        root.append(&resize_handle);
         root.append(&header);
         root.append(&scroller);
         root.set_height_request(DEFAULT_LOG_HEIGHT + LOG_CHROME_HEIGHT);
@@ -230,6 +238,24 @@ impl LogDrawer {
                 *is_minimized = true;
             }
         });
+
+        let drag_start_height = Rc::new(RefCell::new(DEFAULT_LOG_HEIGHT));
+        let drag_start_height_begin = drag_start_height.clone();
+        let min_height_begin = min_height.clone();
+        let drag_resize = gtk::GestureDrag::new();
+        drag_resize.set_button(1);
+        drag_resize.connect_drag_begin(move |_, _, _| {
+            *drag_start_height_begin.borrow_mut() = *min_height_begin.borrow();
+        });
+
+        let drag_start_height_update = drag_start_height.clone();
+        let apply_height_drag = apply_height.clone();
+        drag_resize.connect_drag_update(move |_, _, dy| {
+            let start = *drag_start_height_update.borrow();
+            let next = start - dy.round() as i32;
+            apply_height_drag(next, true);
+        });
+        resize_handle.add_controller(drag_resize);
 
         let root_hide = root.clone();
         close_btn.connect_clicked(move |_| {
