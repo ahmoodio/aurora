@@ -1182,27 +1182,29 @@ fn themed_css(theme: ThemeMode) -> String {
             letter-spacing: 0.2px;
         }
         .log-drawer-root {
-            background-color: @window_bg_color;
+            background-color: #272b34;
             border-top: 1px solid $TABLE_HEADER_BORDER$;
         }
         .log-drawer-header {
-            background-color: @window_bg_color;
+            background-color: #2f3440;
             border-bottom: 1px solid $TABLE_HEADER_BORDER$;
         }
         .log-drawer-scroller,
         .log-drawer-scroller > viewport,
-        .log-drawer-scroller textview {
-            background-color: @window_bg_color;
+        .log-drawer-scroller textview,
+        .log-drawer-scroller textview text {
+            background-color: #232831;
+            color: #e5eaf3;
         }
         .log-resize-handle {
             min-height: 10px;
             padding: 0;
             margin: 0;
             border-bottom: 1px solid $TABLE_HEADER_BORDER$;
-            background-color: @window_bg_color;
+            background-color: #3a404c;
         }
         .log-resize-handle:hover {
-            background-color: @headerbar_bg_color;
+            background-color: #4a5160;
         }
         .dim-label {
             color: @dim_label_color;
