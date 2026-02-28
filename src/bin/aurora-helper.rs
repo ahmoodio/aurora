@@ -109,6 +109,11 @@ fn validate_pacman(args: &[String]) -> Result<()> {
 
     while i < args.len() {
         let arg = &args[i];
+        if arg == "--" {
+            allow_flags = false;
+            i += 1;
+            continue;
+        }
         if arg.starts_with('-') {
             if !allow_flags {
                 return Err(anyhow!("flags after packages are not allowed"));
