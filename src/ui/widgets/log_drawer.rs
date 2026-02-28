@@ -73,6 +73,7 @@ impl LogDrawer {
         scroller.set_min_content_height(DEFAULT_LOG_HEIGHT);
         scroller.set_max_content_height(DEFAULT_LOG_HEIGHT);
         scroller.set_height_request(DEFAULT_LOG_HEIGHT);
+        scroller.set_size_request(-1, DEFAULT_LOG_HEIGHT);
 
         let drag_handle = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         drag_handle.add_css_class("log-drag-handle");
@@ -81,10 +82,14 @@ impl LogDrawer {
 
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.set_vexpand(false);
+        root.set_hexpand(true);
+        root.set_halign(gtk::Align::Fill);
+        root.set_valign(gtk::Align::End);
         root.append(&drag_handle);
         root.append(&header);
         root.append(&scroller);
         root.set_height_request(DEFAULT_LOG_HEIGHT + LOG_CHROME_HEIGHT);
+        root.set_size_request(-1, DEFAULT_LOG_HEIGHT + LOG_CHROME_HEIGHT);
         root.set_visible(false);
 
         let lines = Rc::new(RefCell::new(Vec::new()));
@@ -204,7 +209,9 @@ impl LogDrawer {
             scroller_apply.set_min_content_height(next);
             scroller_apply.set_max_content_height(next);
             scroller_apply.set_height_request(next);
+            scroller_apply.set_size_request(-1, next);
             root_apply.set_height_request(next + LOG_CHROME_HEIGHT);
+            root_apply.set_size_request(-1, next + LOG_CHROME_HEIGHT);
             scroller_apply.queue_resize();
             root_apply.queue_resize();
 
@@ -325,7 +332,9 @@ impl LogDrawer {
             self.scroller.set_min_content_height(height);
             self.scroller.set_max_content_height(height);
             self.scroller.set_height_request(height);
+            self.scroller.set_size_request(-1, height);
             self.root.set_height_request(height + LOG_CHROME_HEIGHT);
+            self.root.set_size_request(-1, height + LOG_CHROME_HEIGHT);
             self.scroller.queue_resize();
             self.root.queue_resize();
             self.scroll_to_bottom();
