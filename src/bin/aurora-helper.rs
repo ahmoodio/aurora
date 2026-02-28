@@ -105,12 +105,38 @@ fn validate_pacman(args: &[String]) -> Result<()> {
     let mut allow_flags = true;
     let mut pkgs = Vec::new();
     let mut pkg_files = Vec::new();
+    let mut i = 1usize;
 
-    for arg in args.iter().skip(1) {
+    while i < args.len() {
+        let arg = &args[i];
         if arg.starts_with('-') {
             if !allow_flags {
                 return Err(anyhow!("flags after packages are not allowed"));
             }
+
+            if is_allowed_flag(arg) {
+                i += 1;
+                continue;
+            }
+
+            if flag_takes_value(arg) {
+                let Some(value) = args.get(i + 1) else {
+                    return Err(anyhow!("flag requires value: {arg}"));
+                };
+                if value.starts_with('-') {
+                    return Err(anyhow!("flag requires value: {arg}"));
+                }
+                validate_flag_value(arg, value)?;
+                i += 2;
+                continue;
+            }
+
+            if let Some((flag, value)) = split_flag_value(arg) {
+                validate_flag_value(flag, value)?;
+                i += 1;
+                continue;
+            }
+
             if !is_allowed_flag(arg) {
                 return Err(anyhow!("flag not allowed: {arg}"));
             }
@@ -128,6 +154,7 @@ fn validate_pacman(args: &[String]) -> Result<()> {
                 pkgs.push(arg);
             }
         }
+        i += 1;
     }
 
     if op == "-S" || op == "-Rns" {
@@ -153,6 +180,54 @@ fn validate_pacman(args: &[String]) -> Result<()> {
 
 fn is_allowed_flag(flag: &str) -> bool {
     matches!(flag, "--noconfirm" | "--needed" | "--noprogressbar")
+}
+
+fn flag_takes_value(flag: &str) -> bool {
+    matches!(
+        flag,
+        "--config" | "--color" | "--overwrite" | "--dbpath" | "--root" | "--sysroot"
+    )
+}
+
+fn split_flag_value(flag: &str) -> Option<(&str, &str)> {
+    let (name, value) = flag.split_once('=')?;
+    if !flag_takes_value(name) {
+        return None;
+    }
+    Some((name, value))
+}
+
+fn validate_flag_value(flag: &str, value: &str) -> Result<()> {
+    if value.is_empty() || value.len() > 4096 || value.contains('\0') {
+        return Err(anyhow!("invalid value for {flag}"));
+    }
+
+    match flag {
+        "--color" => {
+            if !matches!(value, "always" | "auto" | "never") {
+                return Err(anyhow!("invalid value for --color: {value}"));
+            }
+        }
+        "--config" => {
+            if !value.starts_with("/etc/") && !value.starts_with("/usr/") {
+                return Err(anyhow!("unsafe --config path: {value}"));
+            }
+        }
+        "--dbpath" | "--root" | "--sysroot" => {
+            if !value.starts_with('/') {
+                return Err(anyhow!("path for {flag} must be absolute"));
+            }
+        }
+        "--overwrite" => {
+            // pacman accepts glob-like patterns here, allow broad characters.
+            if value.len() > 512 {
+                return Err(anyhow!("invalid value for --overwrite"));
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
 }
 
 fn is_safe_pkg(name: &str) -> bool {
