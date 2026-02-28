@@ -132,13 +132,26 @@ impl QueueController {
             self.toast("No packages selected");
             return;
         }
+        let total = actions.len();
         let mut queue = self.ctx.queue.lock().unwrap();
+        let mut added = 0usize;
         for action in actions {
-            queue.push(action);
+            if queue.push(action) {
+                added += 1;
+            }
         }
         drop(queue);
         self.update_label();
-        self.toast("Selected updates queued");
+        if added == 0 {
+            self.toast("Selected updates already queued");
+        } else if added == total {
+            self.toast("Selected updates queued");
+        } else {
+            self.toast(&format!(
+                "Queued {added} update(s), skipped {} duplicates",
+                total - added
+            ));
+        }
     }
 
     pub fn add_upgrade_all(&self) {

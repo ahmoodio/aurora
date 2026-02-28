@@ -52,8 +52,18 @@ pub struct TransactionQueue {
 }
 
 impl TransactionQueue {
-    pub fn push(&mut self, action: TransactionAction) {
+    pub fn push(&mut self, action: TransactionAction) -> bool {
+        let exists = self.actions.iter().any(|existing| {
+            existing.name == action.name
+                && existing.source == action.source
+                && existing.kind == action.kind
+                && existing.origin == action.origin
+        });
+        if exists {
+            return false;
+        }
         self.actions.push(action);
+        true
     }
 
     pub fn clear(&mut self) {
