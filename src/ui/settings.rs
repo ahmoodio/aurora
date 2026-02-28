@@ -4,7 +4,7 @@ use adw::prelude::*;
 
 use crate::core::cache::{clear_screenshots_cache, save_settings};
 use crate::core::models::{AurHelperKind, ThemeMode};
-use crate::ui::AppContext;
+use crate::ui::{apply_theme, AppContext};
 
 #[derive(Clone)]
 pub struct SettingsPage {
@@ -24,7 +24,11 @@ impl SettingsPage {
 
         let appearance_group = adw::PreferencesGroup::new();
         appearance_group.set_title("Appearance");
-        let theme_list = gtk::StringList::new(&["System", "Light", "Dark"]);
+        let theme_labels = ThemeMode::all()
+            .iter()
+            .map(|theme| theme.label())
+            .collect::<Vec<_>>();
+        let theme_list = gtk::StringList::new(&theme_labels);
         let theme_row = adw::ComboRow::new();
         theme_row.set_title("Theme");
         theme_row.set_model(Some(&theme_list));
@@ -80,11 +84,7 @@ impl SettingsPage {
 
     pub fn bind(&self, ctx: AppContext) {
         let settings = ctx.settings.lock().unwrap().clone();
-        match settings.theme {
-            ThemeMode::System => self.theme_row.set_selected(0),
-            ThemeMode::Light => self.theme_row.set_selected(1),
-            ThemeMode::Dark => self.theme_row.set_selected(2),
-        }
+        self.theme_row.set_selected(settings.theme.to_index());
         match settings.aur_helper {
             AurHelperKind::Yay => self.helper_row.set_selected(0),
             AurHelperKind::Paru => self.helper_row.set_selected(1),
@@ -96,11 +96,7 @@ impl SettingsPage {
             .connect_selected_notify(move |row: &adw::ComboRow| {
                 let selected = row.selected();
                 let mut settings = ctx_clone.settings.lock().unwrap();
-                settings.theme = match selected {
-                    1 => ThemeMode::Light,
-                    2 => ThemeMode::Dark,
-                    _ => ThemeMode::System,
-                };
+                settings.theme = ThemeMode::from_index(selected);
                 apply_theme(settings.theme);
                 let _ = save_settings(&settings);
             });
@@ -139,14 +135,5 @@ impl SettingsPage {
             about.set_issue_url("https://github.com/ahmoodio/yay-gui-manager/issues");
             about.present();
         });
-    }
-}
-
-fn apply_theme(theme: ThemeMode) {
-    let manager = adw::StyleManager::default();
-    match theme {
-        ThemeMode::System => manager.set_color_scheme(adw::ColorScheme::Default),
-        ThemeMode::Light => manager.set_color_scheme(adw::ColorScheme::ForceLight),
-        ThemeMode::Dark => manager.set_color_scheme(adw::ColorScheme::ForceDark),
     }
 }

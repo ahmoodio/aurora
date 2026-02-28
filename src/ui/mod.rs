@@ -231,7 +231,7 @@ pub fn build_ui(app: &adw::Application) {
     let _ = ensure_cache_dirs();
 
     let settings = load_settings();
-    apply_theme(settings.theme);
+    let initial_theme = settings.theme;
     let settings_arc = Arc::new(Mutex::new(settings));
     let ctx = AppContext {
         pacman: Arc::new(Pacman::default()),
@@ -389,7 +389,7 @@ pub fn build_ui(app: &adw::Application) {
     toast_overlay.set_vexpand(true);
     window.set_content(Some(&toast_overlay));
 
-    setup_css();
+    apply_theme(initial_theme);
 
     let stack_for_home_search = stack.clone();
     home_page.open_search_btn.connect_clicked(move |_| {
@@ -786,147 +786,414 @@ fn show_prompt_dialog(
     dialog.present();
 }
 
-fn setup_css() {
-    let provider = gtk::CssProvider::new();
-    provider.load_from_data(
-        "
-        .aurora-toolbar {\n\
-            background-image: linear-gradient(135deg, rgba(6, 20, 44, 0.96), rgba(11, 31, 61, 0.96));\n\
-        }\n\
-        .aurora-header {\n\
-            background-color: rgba(7, 18, 36, 0.86);\n\
-            border-bottom: 1px solid rgba(90, 130, 190, 0.18);\n\
-            box-shadow: inset 0 -1px rgba(255, 255, 255, 0.04);\n\
-        }\n\
-        .sidebar-root {\n\
-            background-image: linear-gradient(180deg, rgba(9, 24, 48, 0.95), rgba(6, 19, 38, 0.95));\n\
-            border: 1px solid rgba(96, 138, 210, 0.24);\n\
-            border-radius: 14px;\n\
-        }\n\
-        .sidebar-brand {\n\
-            padding: 4px 2px;\n\
-        }\n\
-        .sidebar-brand-title {\n\
-            font-weight: 700;\n\
-            letter-spacing: 0.2px;\n\
-        }\n\
-        .sidebar-brand-subtitle {\n\
-            font-size: 11px;\n\
-        }\n\
-        .sidebar-hint {\n\
-            font-size: 11px;\n\
-            padding: 2px 4px;\n\
-        }\n\
-        .aurora-nav {\n\
-            background: transparent;\n\
-            border: none;\n\
-        }\n\
-        .aurora-nav row {\n\
-            margin: 2px 0;\n\
-            border-radius: 10px;\n\
-            min-height: 40px;\n\
-            transition: all 180ms ease;\n\
-        }\n\
-        .aurora-nav row:selected {\n\
-            background-image: linear-gradient(135deg, #1673ff, #2f9bff);\n\
-            color: #ffffff;\n\
-            box-shadow: 0 6px 18px rgba(9, 89, 221, 0.28);\n\
-        }\n\
-        .nav-row {\n\
-            padding: 8px 10px;\n\
-        }\n\
-        .nav-label {\n\
-            font-weight: 600;\n\
-            letter-spacing: 0.15px;\n\
-        }\n\
-        .queue-button {\n\
-            font-weight: 700;\n\
-            padding: 6px 14px;\n\
-            border-radius: 10px;\n\
-        }\n\
-        .card {\n\
-            background-image: linear-gradient(170deg, rgba(18, 37, 69, 0.94), rgba(12, 28, 54, 0.92));\n\
-            border-radius: 14px;\n\
-            border: 1px solid rgba(92, 128, 191, 0.28);\n\
-            box-shadow: 0 8px 22px rgba(1, 8, 18, 0.30);\n\
-            padding: 14px;\n\
-        }\n\
-        .package-card {\n\
-            min-height: 248px;\n\
-        }\n\
-        .page-root {\n\
-            background-color: rgba(8, 22, 43, 0.45);\n\
-            border-radius: 12px;\n\
-            padding: 8px;\n\
-        }\n\
-        .page-controls {\n\
-            padding: 4px 0;\n\
-        }\n\
-        .table-header {\n\
-            padding: 2px 8px;\n\
-            border-radius: 10px;\n\
-            background-color: rgba(11, 30, 57, 0.78);\n\
-            border: 1px solid rgba(96, 132, 190, 0.18);\n\
-        }\n\
-        .table-header-label {\n\
-            color: rgba(191, 208, 233, 0.88);\n\
-            font-weight: 700;\n\
-            letter-spacing: 0.4px;\n\
-            font-size: 11px;\n\
-            text-transform: uppercase;\n\
-        }\n\
-        .table-subtext {\n\
-            font-size: 11px;\n\
-            opacity: 0.88;\n\
-        }\n\
-        .content-scroller {\n\
-            border: 1px solid rgba(96, 132, 190, 0.20);\n\
-            border-radius: 12px;\n\
-            background-color: rgba(6, 18, 36, 0.42);\n\
-        }\n\
-        .package-row,\n\
-        .update-row {\n\
-            border-radius: 10px;\n\
-            margin: 4px 6px;\n\
-            border: 1px solid rgba(97, 134, 198, 0.22);\n\
-            background-color: rgba(13, 29, 56, 0.74);\n\
-        }\n\
-        .package-row:hover,\n\
-        .update-row:hover {\n\
-            background-color: rgba(18, 40, 74, 0.84);\n\
-        }\n\
-        .package-row-inner,\n\
-        .update-row-inner {\n\
-            padding: 8px 10px;\n\
-        }\n\
-        .pill {\n\
-            background-image: linear-gradient(135deg, rgba(35, 96, 255, 0.95), rgba(29, 145, 255, 0.95));\n\
-            color: #f5f9ff;\n\
-            border-radius: 999px;\n\
-            padding: 2px 9px;\n\
-            font-weight: 700;\n\
-            letter-spacing: 0.2px;\n\
-            font-size: 11px;\n\
-        }\n\
-        .pill-secondary {\n\
-            background-image: linear-gradient(135deg, rgba(31, 189, 118, 0.92), rgba(67, 210, 165, 0.92));\n\
-            color: #0b2018;\n\
-            border-radius: 999px;\n\
-            padding: 2px 9px;\n\
-            font-weight: 700;\n\
-            font-size: 11px;\n\
-            letter-spacing: 0.2px;\n\
-        }\n\
-        .dim-label {\n\
-            color: @dim_label_color;\n\
-        }\n\
-        ",
-    );
-    gtk::style_context_add_provider_for_display(
-        &gdk::Display::default().unwrap(),
-        &provider,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
+thread_local! {
+    static AURORA_CSS_PROVIDER: RefCell<Option<gtk::CssProvider>> = RefCell::new(None);
+}
+
+struct ThemePalette {
+    toolbar_from: &'static str,
+    toolbar_to: &'static str,
+    header_bg: &'static str,
+    header_border: &'static str,
+    sidebar_from: &'static str,
+    sidebar_to: &'static str,
+    sidebar_border: &'static str,
+    nav_selected_from: &'static str,
+    nav_selected_to: &'static str,
+    nav_selected_shadow: &'static str,
+    card_from: &'static str,
+    card_to: &'static str,
+    card_border: &'static str,
+    page_bg: &'static str,
+    table_header_bg: &'static str,
+    table_header_border: &'static str,
+    table_header_text: &'static str,
+    scroller_border: &'static str,
+    scroller_bg: &'static str,
+    row_border: &'static str,
+    row_bg: &'static str,
+    row_hover_bg: &'static str,
+    pill_from: &'static str,
+    pill_to: &'static str,
+    pill_secondary_from: &'static str,
+    pill_secondary_to: &'static str,
+    pill_secondary_fg: &'static str,
+}
+
+fn palette_for_theme(theme: ThemeMode) -> ThemePalette {
+    match theme {
+        ThemeMode::System => {
+            if adw::StyleManager::default().is_dark() {
+                palette_for_theme(ThemeMode::Dark)
+            } else {
+                palette_for_theme(ThemeMode::Light)
+            }
+        }
+        ThemeMode::Light => ThemePalette {
+            toolbar_from: "rgba(236, 243, 255, 0.98)",
+            toolbar_to: "rgba(221, 233, 250, 0.98)",
+            header_bg: "rgba(243, 247, 255, 0.95)",
+            header_border: "rgba(80, 122, 191, 0.28)",
+            sidebar_from: "rgba(240, 246, 255, 0.98)",
+            sidebar_to: "rgba(231, 241, 255, 0.98)",
+            sidebar_border: "rgba(104, 140, 200, 0.32)",
+            nav_selected_from: "#0f65d9",
+            nav_selected_to: "#3484ff",
+            nav_selected_shadow: "rgba(29, 99, 210, 0.24)",
+            card_from: "rgba(250, 252, 255, 0.98)",
+            card_to: "rgba(240, 247, 255, 0.98)",
+            card_border: "rgba(109, 145, 207, 0.30)",
+            page_bg: "rgba(224, 237, 255, 0.56)",
+            table_header_bg: "rgba(234, 243, 255, 0.84)",
+            table_header_border: "rgba(113, 151, 212, 0.26)",
+            table_header_text: "rgba(40, 64, 105, 0.90)",
+            scroller_border: "rgba(113, 151, 212, 0.24)",
+            scroller_bg: "rgba(237, 246, 255, 0.74)",
+            row_border: "rgba(113, 151, 212, 0.28)",
+            row_bg: "rgba(245, 250, 255, 0.90)",
+            row_hover_bg: "rgba(232, 243, 255, 0.96)",
+            pill_from: "rgba(20, 107, 255, 0.95)",
+            pill_to: "rgba(43, 147, 255, 0.95)",
+            pill_secondary_from: "rgba(31, 189, 118, 0.92)",
+            pill_secondary_to: "rgba(67, 210, 165, 0.92)",
+            pill_secondary_fg: "#0b2018",
+        },
+        ThemeMode::Dark => ThemePalette {
+            toolbar_from: "rgba(6, 20, 44, 0.96)",
+            toolbar_to: "rgba(11, 31, 61, 0.96)",
+            header_bg: "rgba(7, 18, 36, 0.86)",
+            header_border: "rgba(90, 130, 190, 0.18)",
+            sidebar_from: "rgba(9, 24, 48, 0.95)",
+            sidebar_to: "rgba(6, 19, 38, 0.95)",
+            sidebar_border: "rgba(96, 138, 210, 0.24)",
+            nav_selected_from: "#1673ff",
+            nav_selected_to: "#2f9bff",
+            nav_selected_shadow: "rgba(9, 89, 221, 0.28)",
+            card_from: "rgba(18, 37, 69, 0.94)",
+            card_to: "rgba(12, 28, 54, 0.92)",
+            card_border: "rgba(92, 128, 191, 0.28)",
+            page_bg: "rgba(8, 22, 43, 0.45)",
+            table_header_bg: "rgba(11, 30, 57, 0.78)",
+            table_header_border: "rgba(96, 132, 190, 0.18)",
+            table_header_text: "rgba(191, 208, 233, 0.88)",
+            scroller_border: "rgba(96, 132, 190, 0.20)",
+            scroller_bg: "rgba(6, 18, 36, 0.42)",
+            row_border: "rgba(97, 134, 198, 0.22)",
+            row_bg: "rgba(13, 29, 56, 0.74)",
+            row_hover_bg: "rgba(18, 40, 74, 0.84)",
+            pill_from: "rgba(35, 96, 255, 0.95)",
+            pill_to: "rgba(29, 145, 255, 0.95)",
+            pill_secondary_from: "rgba(31, 189, 118, 0.92)",
+            pill_secondary_to: "rgba(67, 210, 165, 0.92)",
+            pill_secondary_fg: "#0b2018",
+        },
+        ThemeMode::Ocean => ThemePalette {
+            toolbar_from: "rgba(4, 28, 46, 0.96)",
+            toolbar_to: "rgba(5, 45, 71, 0.96)",
+            header_bg: "rgba(5, 26, 43, 0.88)",
+            header_border: "rgba(74, 167, 207, 0.24)",
+            sidebar_from: "rgba(6, 30, 50, 0.95)",
+            sidebar_to: "rgba(3, 23, 40, 0.95)",
+            sidebar_border: "rgba(67, 171, 210, 0.27)",
+            nav_selected_from: "#0aa0d6",
+            nav_selected_to: "#1dc4f0",
+            nav_selected_shadow: "rgba(15, 152, 211, 0.30)",
+            card_from: "rgba(11, 42, 64, 0.94)",
+            card_to: "rgba(9, 33, 54, 0.92)",
+            card_border: "rgba(74, 171, 209, 0.30)",
+            page_bg: "rgba(7, 33, 52, 0.45)",
+            table_header_bg: "rgba(8, 41, 63, 0.78)",
+            table_header_border: "rgba(72, 163, 201, 0.22)",
+            table_header_text: "rgba(177, 226, 242, 0.90)",
+            scroller_border: "rgba(73, 163, 202, 0.22)",
+            scroller_bg: "rgba(5, 28, 44, 0.44)",
+            row_border: "rgba(71, 163, 202, 0.24)",
+            row_bg: "rgba(10, 37, 58, 0.76)",
+            row_hover_bg: "rgba(13, 48, 72, 0.86)",
+            pill_from: "rgba(18, 156, 223, 0.95)",
+            pill_to: "rgba(35, 196, 237, 0.95)",
+            pill_secondary_from: "rgba(42, 193, 156, 0.92)",
+            pill_secondary_to: "rgba(70, 224, 181, 0.92)",
+            pill_secondary_fg: "#08271f",
+        },
+        ThemeMode::Emerald => ThemePalette {
+            toolbar_from: "rgba(10, 34, 23, 0.96)",
+            toolbar_to: "rgba(14, 49, 32, 0.96)",
+            header_bg: "rgba(9, 29, 20, 0.88)",
+            header_border: "rgba(93, 178, 128, 0.23)",
+            sidebar_from: "rgba(11, 36, 24, 0.95)",
+            sidebar_to: "rgba(8, 26, 18, 0.95)",
+            sidebar_border: "rgba(91, 182, 130, 0.28)",
+            nav_selected_from: "#1ba36f",
+            nav_selected_to: "#2ec68a",
+            nav_selected_shadow: "rgba(26, 157, 103, 0.30)",
+            card_from: "rgba(14, 47, 31, 0.94)",
+            card_to: "rgba(10, 36, 24, 0.92)",
+            card_border: "rgba(96, 178, 130, 0.30)",
+            page_bg: "rgba(10, 35, 23, 0.46)",
+            table_header_bg: "rgba(13, 43, 29, 0.78)",
+            table_header_border: "rgba(89, 170, 124, 0.22)",
+            table_header_text: "rgba(190, 233, 203, 0.90)",
+            scroller_border: "rgba(91, 173, 126, 0.22)",
+            scroller_bg: "rgba(8, 29, 19, 0.44)",
+            row_border: "rgba(93, 173, 126, 0.24)",
+            row_bg: "rgba(13, 40, 27, 0.76)",
+            row_hover_bg: "rgba(17, 54, 35, 0.86)",
+            pill_from: "rgba(29, 176, 110, 0.95)",
+            pill_to: "rgba(54, 209, 139, 0.95)",
+            pill_secondary_from: "rgba(64, 195, 126, 0.92)",
+            pill_secondary_to: "rgba(106, 227, 165, 0.92)",
+            pill_secondary_fg: "#0a2a1a",
+        },
+        ThemeMode::Sunset => ThemePalette {
+            toolbar_from: "rgba(46, 23, 20, 0.96)",
+            toolbar_to: "rgba(62, 31, 24, 0.96)",
+            header_bg: "rgba(44, 21, 18, 0.88)",
+            header_border: "rgba(205, 121, 94, 0.25)",
+            sidebar_from: "rgba(48, 24, 20, 0.95)",
+            sidebar_to: "rgba(37, 18, 15, 0.95)",
+            sidebar_border: "rgba(207, 120, 94, 0.28)",
+            nav_selected_from: "#e06a3f",
+            nav_selected_to: "#ff965c",
+            nav_selected_shadow: "rgba(207, 104, 67, 0.32)",
+            card_from: "rgba(63, 32, 25, 0.94)",
+            card_to: "rgba(51, 25, 20, 0.92)",
+            card_border: "rgba(194, 117, 91, 0.30)",
+            page_bg: "rgba(42, 22, 18, 0.47)",
+            table_header_bg: "rgba(57, 28, 22, 0.78)",
+            table_header_border: "rgba(189, 114, 87, 0.24)",
+            table_header_text: "rgba(243, 209, 193, 0.90)",
+            scroller_border: "rgba(190, 115, 88, 0.24)",
+            scroller_bg: "rgba(38, 19, 16, 0.44)",
+            row_border: "rgba(193, 117, 90, 0.26)",
+            row_bg: "rgba(57, 29, 23, 0.76)",
+            row_hover_bg: "rgba(71, 37, 28, 0.86)",
+            pill_from: "rgba(225, 104, 63, 0.96)",
+            pill_to: "rgba(255, 149, 86, 0.96)",
+            pill_secondary_from: "rgba(255, 140, 98, 0.92)",
+            pill_secondary_to: "rgba(255, 181, 124, 0.92)",
+            pill_secondary_fg: "#3a170d",
+        },
+        ThemeMode::Graphite => ThemePalette {
+            toolbar_from: "rgba(23, 27, 36, 0.96)",
+            toolbar_to: "rgba(30, 36, 48, 0.96)",
+            header_bg: "rgba(19, 23, 31, 0.88)",
+            header_border: "rgba(124, 137, 162, 0.20)",
+            sidebar_from: "rgba(24, 29, 39, 0.95)",
+            sidebar_to: "rgba(18, 22, 31, 0.95)",
+            sidebar_border: "rgba(125, 138, 164, 0.24)",
+            nav_selected_from: "#647aa4",
+            nav_selected_to: "#86a0cf",
+            nav_selected_shadow: "rgba(96, 119, 166, 0.28)",
+            card_from: "rgba(29, 35, 48, 0.94)",
+            card_to: "rgba(23, 28, 39, 0.92)",
+            card_border: "rgba(121, 136, 165, 0.28)",
+            page_bg: "rgba(20, 25, 35, 0.46)",
+            table_header_bg: "rgba(27, 33, 45, 0.78)",
+            table_header_border: "rgba(120, 135, 164, 0.20)",
+            table_header_text: "rgba(204, 214, 234, 0.88)",
+            scroller_border: "rgba(122, 136, 166, 0.20)",
+            scroller_bg: "rgba(17, 21, 30, 0.44)",
+            row_border: "rgba(122, 136, 166, 0.22)",
+            row_bg: "rgba(25, 31, 43, 0.76)",
+            row_hover_bg: "rgba(33, 41, 56, 0.86)",
+            pill_from: "rgba(104, 128, 176, 0.95)",
+            pill_to: "rgba(133, 161, 210, 0.95)",
+            pill_secondary_from: "rgba(120, 168, 180, 0.92)",
+            pill_secondary_to: "rgba(146, 196, 208, 0.92)",
+            pill_secondary_fg: "#0e1b1f",
+        },
+    }
+}
+
+fn themed_css(theme: ThemeMode) -> String {
+    let palette = palette_for_theme(theme);
+    let mut css = r#"
+        .aurora-toolbar {
+            background-image: linear-gradient(135deg, $TOOLBAR_FROM$, $TOOLBAR_TO$);
+        }
+        .aurora-header {
+            background-color: $HEADER_BG$;
+            border-bottom: 1px solid $HEADER_BORDER$;
+            box-shadow: inset 0 -1px rgba(255, 255, 255, 0.04);
+        }
+        .sidebar-root {
+            background-image: linear-gradient(180deg, $SIDEBAR_FROM$, $SIDEBAR_TO$);
+            border: 1px solid $SIDEBAR_BORDER$;
+            border-radius: 14px;
+        }
+        .sidebar-brand {
+            padding: 4px 2px;
+        }
+        .sidebar-brand-title {
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+        .sidebar-brand-subtitle {
+            font-size: 11px;
+        }
+        .sidebar-hint {
+            font-size: 11px;
+            padding: 2px 4px;
+        }
+        .aurora-nav {
+            background: transparent;
+            border: none;
+        }
+        .aurora-nav row {
+            margin: 2px 0;
+            border-radius: 10px;
+            min-height: 40px;
+            transition: all 180ms ease;
+        }
+        .aurora-nav row:selected {
+            background-image: linear-gradient(135deg, $NAV_SELECTED_FROM$, $NAV_SELECTED_TO$);
+            color: #ffffff;
+            box-shadow: 0 6px 18px $NAV_SELECTED_SHADOW$;
+        }
+        .nav-row {
+            padding: 8px 10px;
+        }
+        .nav-label {
+            font-weight: 600;
+            letter-spacing: 0.15px;
+        }
+        .queue-button {
+            font-weight: 700;
+            padding: 6px 14px;
+            border-radius: 10px;
+        }
+        .card {
+            background-image: linear-gradient(170deg, $CARD_FROM$, $CARD_TO$);
+            border-radius: 14px;
+            border: 1px solid $CARD_BORDER$;
+            box-shadow: 0 8px 22px rgba(1, 8, 18, 0.30);
+            padding: 14px;
+        }
+        .package-card {
+            min-height: 248px;
+        }
+        .page-root {
+            background-color: $PAGE_BG$;
+            border-radius: 12px;
+            padding: 8px;
+        }
+        .page-controls {
+            padding: 4px 0;
+        }
+        .table-header {
+            padding: 2px 8px;
+            border-radius: 10px;
+            background-color: $TABLE_HEADER_BG$;
+            border: 1px solid $TABLE_HEADER_BORDER$;
+        }
+        .table-header-label {
+            color: $TABLE_HEADER_TEXT$;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .table-subtext {
+            font-size: 11px;
+            opacity: 0.88;
+        }
+        .content-scroller {
+            border: 1px solid $SCROLLER_BORDER$;
+            border-radius: 12px;
+            background-color: $SCROLLER_BG$;
+        }
+        .package-row,
+        .update-row {
+            border-radius: 10px;
+            margin: 4px 6px;
+            border: 1px solid $ROW_BORDER$;
+            background-color: $ROW_BG$;
+        }
+        .package-row:hover,
+        .update-row:hover {
+            background-color: $ROW_HOVER_BG$;
+        }
+        .package-row-inner,
+        .update-row-inner {
+            padding: 8px 10px;
+        }
+        .pill {
+            background-image: linear-gradient(135deg, $PILL_FROM$, $PILL_TO$);
+            color: #f5f9ff;
+            border-radius: 999px;
+            padding: 2px 9px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            font-size: 11px;
+        }
+        .pill-secondary {
+            background-image: linear-gradient(135deg, $PILL_SECONDARY_FROM$, $PILL_SECONDARY_TO$);
+            color: $PILL_SECONDARY_FG$;
+            border-radius: 999px;
+            padding: 2px 9px;
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 0.2px;
+        }
+        .dim-label {
+            color: @dim_label_color;
+        }
+    "#.to_string();
+
+    let replacements = [
+        ("$TOOLBAR_FROM$", palette.toolbar_from),
+        ("$TOOLBAR_TO$", palette.toolbar_to),
+        ("$HEADER_BG$", palette.header_bg),
+        ("$HEADER_BORDER$", palette.header_border),
+        ("$SIDEBAR_FROM$", palette.sidebar_from),
+        ("$SIDEBAR_TO$", palette.sidebar_to),
+        ("$SIDEBAR_BORDER$", palette.sidebar_border),
+        ("$NAV_SELECTED_FROM$", palette.nav_selected_from),
+        ("$NAV_SELECTED_TO$", palette.nav_selected_to),
+        ("$NAV_SELECTED_SHADOW$", palette.nav_selected_shadow),
+        ("$CARD_FROM$", palette.card_from),
+        ("$CARD_TO$", palette.card_to),
+        ("$CARD_BORDER$", palette.card_border),
+        ("$PAGE_BG$", palette.page_bg),
+        ("$TABLE_HEADER_BG$", palette.table_header_bg),
+        ("$TABLE_HEADER_BORDER$", palette.table_header_border),
+        ("$TABLE_HEADER_TEXT$", palette.table_header_text),
+        ("$SCROLLER_BORDER$", palette.scroller_border),
+        ("$SCROLLER_BG$", palette.scroller_bg),
+        ("$ROW_BORDER$", palette.row_border),
+        ("$ROW_BG$", palette.row_bg),
+        ("$ROW_HOVER_BG$", palette.row_hover_bg),
+        ("$PILL_FROM$", palette.pill_from),
+        ("$PILL_TO$", palette.pill_to),
+        ("$PILL_SECONDARY_FROM$", palette.pill_secondary_from),
+        ("$PILL_SECONDARY_TO$", palette.pill_secondary_to),
+        ("$PILL_SECONDARY_FG$", palette.pill_secondary_fg),
+    ];
+    for (from, to) in replacements {
+        css = css.replace(from, to);
+    }
+    css
+}
+
+fn setup_css(theme: ThemeMode) {
+    let Some(display) = gdk::Display::default() else {
+        return;
+    };
+
+    AURORA_CSS_PROVIDER.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let provider = slot.get_or_insert_with(|| {
+            let provider = gtk::CssProvider::new();
+            gtk::style_context_add_provider_for_display(
+                &display,
+                &provider,
+                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
+            provider
+        });
+        provider.load_from_data(&themed_css(theme));
+    });
 }
 
 fn build_nav_row(icon_name: &str, title: &str) -> gtk::ListBoxRow {
@@ -948,11 +1215,16 @@ fn build_nav_row(icon_name: &str, title: &str) -> gtk::ListBoxRow {
     row
 }
 
-fn apply_theme(theme: ThemeMode) {
+pub(crate) fn apply_theme(theme: ThemeMode) {
     let manager = adw::StyleManager::default();
     match theme {
         ThemeMode::System => manager.set_color_scheme(adw::ColorScheme::Default),
         ThemeMode::Light => manager.set_color_scheme(adw::ColorScheme::ForceLight),
-        ThemeMode::Dark => manager.set_color_scheme(adw::ColorScheme::ForceDark),
+        ThemeMode::Dark
+        | ThemeMode::Ocean
+        | ThemeMode::Emerald
+        | ThemeMode::Sunset
+        | ThemeMode::Graphite => manager.set_color_scheme(adw::ColorScheme::ForceDark),
     }
+    setup_css(theme);
 }

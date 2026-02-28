@@ -89,6 +89,51 @@ pub enum ThemeMode {
     System,
     Light,
     Dark,
+    Ocean,
+    Emerald,
+    Sunset,
+    Graphite,
+}
+
+impl ThemeMode {
+    pub fn all() -> &'static [ThemeMode] {
+        static THEMES: [ThemeMode; 7] = [
+            ThemeMode::System,
+            ThemeMode::Light,
+            ThemeMode::Dark,
+            ThemeMode::Ocean,
+            ThemeMode::Emerald,
+            ThemeMode::Sunset,
+            ThemeMode::Graphite,
+        ];
+        &THEMES
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ThemeMode::System => "System",
+            ThemeMode::Light => "Light",
+            ThemeMode::Dark => "Dark",
+            ThemeMode::Ocean => "Ocean",
+            ThemeMode::Emerald => "Emerald",
+            ThemeMode::Sunset => "Sunset",
+            ThemeMode::Graphite => "Graphite",
+        }
+    }
+
+    pub fn to_index(self) -> u32 {
+        Self::all()
+            .iter()
+            .position(|candidate| *candidate == self)
+            .unwrap_or(0) as u32
+    }
+
+    pub fn from_index(index: u32) -> ThemeMode {
+        Self::all()
+            .get(index as usize)
+            .copied()
+            .unwrap_or(ThemeMode::System)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
