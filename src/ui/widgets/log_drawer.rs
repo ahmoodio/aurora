@@ -25,6 +25,7 @@ pub struct LogDrawer {
 impl LogDrawer {
     pub fn new() -> Self {
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        header.add_css_class("log-drawer-header");
         header.set_margin_top(4);
         header.set_margin_bottom(4);
         header.set_margin_start(8);
@@ -58,6 +59,7 @@ impl LogDrawer {
         let buffer = text_view.buffer();
 
         let scroller = gtk::ScrolledWindow::new();
+        scroller.add_css_class("log-drawer-scroller");
         scroller.set_vexpand(false);
         scroller.set_child(Some(&text_view));
         scroller.set_min_content_height(DEFAULT_LOG_HEIGHT);
@@ -72,6 +74,7 @@ impl LogDrawer {
         resize_handle.set_cursor_from_name(Some("ns-resize"));
 
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        root.add_css_class("log-drawer-root");
         root.set_vexpand(false);
         root.set_hexpand(true);
         root.set_halign(gtk::Align::Fill);

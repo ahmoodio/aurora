@@ -1181,15 +1181,28 @@ fn themed_css(theme: ThemeMode) -> String {
             font-size: 11px;
             letter-spacing: 0.2px;
         }
+        .log-drawer-root {
+            background-color: @window_bg_color;
+            border-top: 1px solid $TABLE_HEADER_BORDER$;
+        }
+        .log-drawer-header {
+            background-color: @window_bg_color;
+            border-bottom: 1px solid $TABLE_HEADER_BORDER$;
+        }
+        .log-drawer-scroller,
+        .log-drawer-scroller > viewport,
+        .log-drawer-scroller textview {
+            background-color: @window_bg_color;
+        }
         .log-resize-handle {
             min-height: 10px;
             padding: 0;
             margin: 0;
             border-bottom: 1px solid $TABLE_HEADER_BORDER$;
-            background-color: rgba(255, 255, 255, 0.03);
+            background-color: @window_bg_color;
         }
         .log-resize-handle:hover {
-            background-color: rgba(255, 255, 255, 0.12);
+            background-color: @headerbar_bg_color;
         }
         .dim-label {
             color: @dim_label_color;
