@@ -11,8 +11,6 @@ const DEFAULT_LOG_HEIGHT: i32 = 320;
 const MIN_LOG_HEIGHT: i32 = 72;
 const MAX_LOG_HEIGHT: i32 = 900;
 const LOG_RESIZE_HANDLE_HEIGHT: i32 = 10;
-const LOG_HEADER_HEIGHT: i32 = 56;
-const LOG_CHROME_HEIGHT: i32 = LOG_HEADER_HEIGHT + LOG_RESIZE_HANDLE_HEIGHT;
 
 #[derive(Clone)]
 pub struct LogDrawer {
@@ -27,8 +25,8 @@ pub struct LogDrawer {
 impl LogDrawer {
     pub fn new() -> Self {
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        header.set_margin_top(8);
-        header.set_margin_bottom(8);
+        header.set_margin_top(4);
+        header.set_margin_bottom(4);
         header.set_margin_start(8);
         header.set_margin_end(8);
 
@@ -81,8 +79,6 @@ impl LogDrawer {
         root.append(&resize_handle);
         root.append(&header);
         root.append(&scroller);
-        root.set_height_request(DEFAULT_LOG_HEIGHT + LOG_CHROME_HEIGHT);
-        root.set_size_request(-1, DEFAULT_LOG_HEIGHT + LOG_CHROME_HEIGHT);
         root.set_visible(false);
 
         let lines = Rc::new(RefCell::new(Vec::new()));
@@ -203,8 +199,6 @@ impl LogDrawer {
             scroller_apply.set_max_content_height(next);
             scroller_apply.set_height_request(next);
             scroller_apply.set_size_request(-1, next);
-            root_apply.set_height_request(next + LOG_CHROME_HEIGHT);
-            root_apply.set_size_request(-1, next + LOG_CHROME_HEIGHT);
             scroller_apply.queue_resize();
             root_apply.queue_resize();
 
@@ -293,8 +287,6 @@ impl LogDrawer {
             self.scroller.set_max_content_height(height);
             self.scroller.set_height_request(height);
             self.scroller.set_size_request(-1, height);
-            self.root.set_height_request(height + LOG_CHROME_HEIGHT);
-            self.root.set_size_request(-1, height + LOG_CHROME_HEIGHT);
             self.scroller.queue_resize();
             self.root.queue_resize();
             self.scroll_to_bottom();
