@@ -7,13 +7,11 @@ use gtk::prelude::*;
 use gtk::{gdk, gio};
 
 const DEFAULT_LOG_LIMIT: usize = 1000;
-const DEFAULT_LOG_HEIGHT: i32 = 220;
+const DEFAULT_LOG_HEIGHT: i32 = 320;
 const MIN_LOG_HEIGHT: i32 = 72;
 const MAX_LOG_HEIGHT: i32 = 900;
 const LOG_HEADER_HEIGHT: i32 = 56;
-const LOG_DRAG_HANDLE_HEIGHT: i32 = 10;
-const LOG_CHROME_HEIGHT: i32 = LOG_HEADER_HEIGHT + LOG_DRAG_HANDLE_HEIGHT;
-const LOG_RESIZE_STEP: i32 = 40;
+const LOG_CHROME_HEIGHT: i32 = LOG_HEADER_HEIGHT;
 
 #[derive(Clone)]
 pub struct LogDrawer {
@@ -43,10 +41,6 @@ impl LogDrawer {
         let save_btn = gtk::Button::with_label("Save");
         let clear_btn = gtk::Button::with_label("Clear");
         let clear_lock_btn = gtk::Button::with_label("Clear Lock");
-        let resize_btn = gtk::Button::with_label("Resize");
-        resize_btn.set_tooltip_text(Some("Drag up/down to resize logs"));
-        let shorter_btn = gtk::Button::with_label("Shorter");
-        let taller_btn = gtk::Button::with_label("Taller");
 
         header.append(&title);
         header.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
@@ -56,9 +50,6 @@ impl LogDrawer {
         header.append(&save_btn);
         header.append(&clear_btn);
         header.append(&clear_lock_btn);
-        header.append(&resize_btn);
-        header.append(&shorter_btn);
-        header.append(&taller_btn);
 
         let text_view = gtk::TextView::new();
         text_view.set_editable(false);
@@ -75,17 +66,11 @@ impl LogDrawer {
         scroller.set_height_request(DEFAULT_LOG_HEIGHT);
         scroller.set_size_request(-1, DEFAULT_LOG_HEIGHT);
 
-        let drag_handle = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        drag_handle.add_css_class("log-drag-handle");
-        drag_handle.set_height_request(LOG_DRAG_HANDLE_HEIGHT);
-        drag_handle.set_hexpand(true);
-
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.set_vexpand(false);
         root.set_hexpand(true);
         root.set_halign(gtk::Align::Fill);
         root.set_valign(gtk::Align::End);
-        root.append(&drag_handle);
         root.append(&header);
         root.append(&scroller);
         root.set_height_request(DEFAULT_LOG_HEIGHT + LOG_CHROME_HEIGHT);
@@ -226,57 +211,6 @@ impl LogDrawer {
             } else {
                 minimize_btn_apply.set_icon_name("pan-down-symbolic");
             }
-        });
-
-        let min_height_shorter = min_height.clone();
-        let apply_height_shorter = apply_height.clone();
-        shorter_btn.connect_clicked(move |_| {
-            let height = *min_height_shorter.borrow();
-            apply_height_shorter(height - LOG_RESIZE_STEP, true);
-        });
-
-        let min_height_taller = min_height.clone();
-        let apply_height_taller = apply_height.clone();
-        taller_btn.connect_clicked(move |_| {
-            let height = *min_height_taller.borrow();
-            apply_height_taller(height + LOG_RESIZE_STEP, true);
-        });
-
-        let drag_start_height = Rc::new(RefCell::new(DEFAULT_LOG_HEIGHT));
-        let min_height_drag = min_height.clone();
-        let drag_start_height_begin = drag_start_height.clone();
-        let drag_start_height_update = drag_start_height.clone();
-        let drag_start_height_begin_handle = drag_start_height.clone();
-        let drag = gtk::GestureDrag::new();
-        drag.set_button(1);
-        drag.connect_drag_begin(move |_, _, _| {
-            *drag_start_height_begin.borrow_mut() = *min_height_drag.borrow();
-        });
-        let apply_height_drag = apply_height.clone();
-        drag.connect_drag_update(move |_, _, dy| {
-            let start_height = *drag_start_height_update.borrow();
-            apply_height_drag(start_height - dy as i32, true);
-        });
-        resize_btn.add_controller(drag);
-
-        let min_height_drag_handle = min_height.clone();
-        let apply_height_drag_handle = apply_height.clone();
-        let drag_handle_gesture = gtk::GestureDrag::new();
-        drag_handle_gesture.set_button(1);
-        drag_handle_gesture.connect_drag_begin(move |_, _, _| {
-            *drag_start_height_begin_handle.borrow_mut() = *min_height_drag_handle.borrow();
-        });
-        drag_handle_gesture.connect_drag_update(move |_, _, dy| {
-            let start_height = *drag_start_height.borrow();
-            apply_height_drag_handle(start_height - dy as i32, true);
-        });
-        drag_handle.add_controller(drag_handle_gesture);
-
-        let min_height_resize = min_height.clone();
-        let apply_height_resize = apply_height.clone();
-        resize_btn.connect_clicked(move |_| {
-            let height = *min_height_resize.borrow();
-            apply_height_resize(height + LOG_RESIZE_STEP, true);
         });
 
         let min_height_toggle = min_height.clone();
