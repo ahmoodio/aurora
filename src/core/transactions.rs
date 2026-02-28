@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use crate::core::models::{ActionKind, AurHelperKind, PackageSource, Settings, TransactionAction, TransactionQueue};
+use crate::core::models::{
+    ActionKind, AurHelperKind, PackageSource, Settings, TerminalMode, TransactionAction,
+    TransactionQueue,
+};
 use crate::core::runner::CommandSpec;
 
 #[derive(Debug, Clone)]
@@ -19,8 +22,11 @@ pub fn plan_transactions(queue: &TransactionQueue, settings: &Settings) -> Trans
 }
 
 pub fn command_for_action(action: &TransactionAction, settings: &Settings) -> Option<CommandSpec> {
+    // Integrated logs run through pipes, so interactive package prompts can block forever.
+    // Force non-interactive mode there; user setting still controls external-terminal mode.
+    let noninteractive = settings.allow_noconfirm || settings.terminal_mode == TerminalMode::Integrated;
     let mut noconfirm = Vec::new();
-    if settings.allow_noconfirm {
+    if noninteractive {
         noconfirm.push("--noconfirm".to_string());
     }
     let helper = helper_path();

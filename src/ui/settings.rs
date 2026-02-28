@@ -68,7 +68,7 @@ impl SettingsPage {
 
         let noconfirm_row = adw::SwitchRow::new();
         noconfirm_row.set_title("Allow --noconfirm");
-        noconfirm_row.set_subtitle("Never use without explicit user opt-in");
+        noconfirm_row.set_subtitle("Applies to external terminal mode. Integrated logs are always non-interactive.");
 
         let cache_group = adw::PreferencesGroup::new();
         cache_group.set_title("Cache");
