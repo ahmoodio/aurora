@@ -1,4 +1,6 @@
 use std::io::{BufRead, BufReader, Write};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Stdio};
 use std::sync::mpsc::Receiver;
 use std::thread;
@@ -128,8 +130,18 @@ impl CommandRunner {
                 let tx = sender.clone();
                 thread::spawn(move || {
                     let reader = BufReader::new(out);
-                    for line in reader.lines().flatten() {
-                        let _ = tx.send(LogEvent::Line(line));
+                    for line in reader.lines() {
+                        match line {
+                            Ok(line) => {
+                                let _ = tx.send(LogEvent::Line(line));
+                            }
+                            Err(err) => {
+                                let _ = tx.send(LogEvent::Line(format!(
+                                    "Failed to read command stdout: {err}"
+                                )));
+                                break;
+                            }
+                        }
                     }
                 });
             }
@@ -138,8 +150,18 @@ impl CommandRunner {
                 let tx = sender.clone();
                 thread::spawn(move || {
                     let reader = BufReader::new(err);
-                    for line in reader.lines().flatten() {
-                        let _ = tx.send(LogEvent::Line(line));
+                    for line in reader.lines() {
+                        match line {
+                            Ok(line) => {
+                                let _ = tx.send(LogEvent::Line(line));
+                            }
+                            Err(err) => {
+                                let _ = tx.send(LogEvent::Line(format!(
+                                    "Failed to read command stderr: {err}"
+                                )));
+                                break;
+                            }
+                        }
                     }
                 });
             }
@@ -220,12 +242,32 @@ fn shell_quote(input: &str) -> String {
 }
 
 fn command_exists(name: &str) -> bool {
-    Command::new("sh")
-        .arg("-lc")
-        .arg(format!("command -v {name} >/dev/null 2>&1"))
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    if name.is_empty() || name.contains('/') {
+        return false;
+    }
+
+    let Some(path_var) = std::env::var_os("PATH") else {
+        return false;
+    };
+
+    std::env::split_paths(&path_var).any(|dir| {
+        let candidate = dir.join(name);
+        let Ok(meta) = std::fs::metadata(&candidate) else {
+            return false;
+        };
+        if !meta.is_file() {
+            return false;
+        }
+
+        #[cfg(unix)]
+        {
+            meta.permissions().mode() & 0o111 != 0
+        }
+        #[cfg(not(unix))]
+        {
+            true
+        }
+    })
 }
 
 fn resolve_terminal(preferred: TerminalEmulator) -> Option<TerminalEmulator> {
