@@ -7,6 +7,9 @@ use crate::core::models::PackageSummary;
 use crate::ui::widgets::card;
 use crate::ui::{run_search, AppContext, UiHandles};
 
+const INITIAL_RESULT_LIMIT: usize = 90;
+const RESULT_PAGE_SIZE: usize = 90;
+
 #[derive(Clone)]
 pub struct SearchPage {
     pub root: gtk::Box,
@@ -15,7 +18,9 @@ pub struct SearchPage {
     state_filter: gtk::DropDown,
     results: gtk::FlowBox,
     status: gtk::Label,
+    show_more_btn: gtk::Button,
     all_results: Rc<RefCell<Vec<PackageSummary>>>,
+    result_limit: Rc<RefCell<usize>>,
 }
 
 impl SearchPage {
@@ -55,6 +60,11 @@ impl SearchPage {
         status.add_css_class("dim-label");
         root.append(&status);
 
+        let show_more_btn = gtk::Button::with_label("See More");
+        show_more_btn.set_halign(gtk::Align::Center);
+        show_more_btn.set_visible(false);
+        root.append(&show_more_btn);
+
         let results = gtk::FlowBox::new();
         results.set_valign(gtk::Align::Start);
         results.set_min_children_per_line(1);
@@ -81,7 +91,9 @@ impl SearchPage {
             state_filter,
             results,
             status,
+            show_more_btn,
             all_results: Rc::new(RefCell::new(Vec::new())),
+            result_limit: Rc::new(RefCell::new(INITIAL_RESULT_LIMIT)),
         }
     }
 
@@ -105,11 +117,13 @@ impl SearchPage {
                 *debounce_inner.borrow_mut() = None;
                 let query = query.trim().to_string();
                 if query.is_empty() {
+                    page.reset_result_limit();
                     page.status.set_text("Type a package name to search.");
                     page.clear_results();
                     return glib::ControlFlow::Break;
                 }
                 stack.set_visible_child_name("search");
+                page.reset_result_limit();
                 page.status.set_text(&format!("Searching for \"{query}\"..."));
                 run_search(query, ctx.clone(), page.clone(), handles.clone());
                 glib::ControlFlow::Break
@@ -121,6 +135,7 @@ impl SearchPage {
         let handles_for_filter = handles.clone();
         let page = self.clone();
         self.source_filter.connect_selected_notify(move |_| {
+            page.reset_result_limit();
             page.render_filtered(&ctx_for_filter, &handles_for_filter);
         });
 
@@ -128,12 +143,22 @@ impl SearchPage {
         let handles_for_state = handles.clone();
         let page = self.clone();
         self.state_filter.connect_selected_notify(move |_| {
+            page.reset_result_limit();
             page.render_filtered(&ctx_for_state, &handles_for_state);
+        });
+
+        let ctx_for_more = ctx.clone();
+        let handles_for_more = handles.clone();
+        let page = self.clone();
+        self.show_more_btn.connect_clicked(move |_| {
+            page.expand_result_limit();
+            page.render_filtered(&ctx_for_more, &handles_for_more);
         });
     }
 
     pub fn set_results(&self, results: Vec<PackageSummary>, ctx: &AppContext, handles: &UiHandles) {
         *self.all_results.borrow_mut() = results;
+        self.reset_result_limit();
         self.render_filtered(ctx, handles);
     }
 
@@ -161,13 +186,19 @@ impl SearchPage {
             .collect();
 
         if results.is_empty() {
+            self.show_more_btn.set_visible(false);
             self.status.set_text("No results found for selected filters.");
             return;
         }
 
+        let total = results.len();
+        let limit = *self.result_limit.borrow();
+        let shown = total.min(limit);
         self.status
-            .set_text(&format!("{} results", results.len()));
-        for pkg in results {
+            .set_text(&format!("{shown} of {total} results"));
+        self.show_more_btn.set_visible(shown < total);
+
+        for pkg in results.into_iter().take(limit) {
             let queue = handles.queue.clone();
             let handles_for_details = handles.clone();
             let ctx_for_details = ctx.clone();
@@ -195,8 +226,17 @@ impl SearchPage {
     }
 
     pub fn clear_results(&self) {
+        self.show_more_btn.set_visible(false);
         while let Some(child) = self.results.first_child() {
             self.results.remove(&child);
         }
+    }
+
+    fn reset_result_limit(&self) {
+        *self.result_limit.borrow_mut() = INITIAL_RESULT_LIMIT;
+    }
+
+    fn expand_result_limit(&self) {
+        *self.result_limit.borrow_mut() += RESULT_PAGE_SIZE;
     }
 }
