@@ -101,7 +101,7 @@ fn validate_pacman(args: &[String]) -> Result<()> {
     }
 
     let op = &args[0];
-    let allowed_ops = ["-S", "-Syu", "-Rns", "-U"];
+    let allowed_ops = ["-S", "-Syu", "-Rns", "-U", "-D"];
     if !allowed_ops.contains(&op.as_str()) {
         return Err(anyhow!("operation not allowed: {op}"));
     }
@@ -166,7 +166,7 @@ fn validate_pacman(args: &[String]) -> Result<()> {
         i += 1;
     }
 
-    if op == "-S" || op == "-Rns" {
+    if op == "-S" || op == "-Rns" || op == "-D" {
         if pkgs.is_empty() {
             return Err(anyhow!("no packages supplied"));
         }
@@ -188,7 +188,10 @@ fn validate_pacman(args: &[String]) -> Result<()> {
 }
 
 fn is_allowed_flag(flag: &str) -> bool {
-    matches!(flag, "--noconfirm" | "--needed" | "--noprogressbar")
+    matches!(
+        flag,
+        "--noconfirm" | "--needed" | "--noprogressbar" | "--asdeps" | "--asexplicit"
+    )
 }
 
 fn flag_takes_value(flag: &str) -> bool {
