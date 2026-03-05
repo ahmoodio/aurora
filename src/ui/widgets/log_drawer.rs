@@ -217,16 +217,14 @@ impl LogDrawer {
         let minimized_toggle = minimized.clone();
         let apply_height_toggle = apply_height.clone();
         minimize_btn.connect_clicked(move |_| {
-            let mut is_minimized = minimized_toggle.borrow_mut();
-            if *is_minimized {
+            let is_minimized = *minimized_toggle.borrow();
+            if is_minimized {
                 let restore = *expanded_height_toggle.borrow();
                 apply_height_toggle(restore, false);
-                *is_minimized = false;
             } else {
                 let current = *min_height_toggle.borrow();
                 *expanded_height_toggle.borrow_mut() = current;
                 apply_height_toggle(MIN_LOG_HEIGHT, false);
-                *is_minimized = true;
             }
         });
 
