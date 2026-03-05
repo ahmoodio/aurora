@@ -62,10 +62,7 @@ impl LogDrawer {
         scroller.add_css_class("log-drawer-scroller");
         scroller.set_vexpand(false);
         scroller.set_child(Some(&text_view));
-        scroller.set_min_content_height(DEFAULT_LOG_HEIGHT);
-        scroller.set_max_content_height(DEFAULT_LOG_HEIGHT);
-        scroller.set_height_request(DEFAULT_LOG_HEIGHT);
-        scroller.set_size_request(-1, DEFAULT_LOG_HEIGHT);
+        Self::set_scroller_height(&scroller, DEFAULT_LOG_HEIGHT);
 
         let resize_handle = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         resize_handle.add_css_class("log-resize-handle");
@@ -198,10 +195,7 @@ impl LogDrawer {
         let apply_height = Rc::new(move |next: i32, remember_expanded: bool| {
             let next = next.clamp(MIN_LOG_HEIGHT, MAX_LOG_HEIGHT);
             *min_height_apply.borrow_mut() = next;
-            scroller_apply.set_min_content_height(next);
-            scroller_apply.set_max_content_height(next);
-            scroller_apply.set_height_request(next);
-            scroller_apply.set_size_request(-1, next);
+            Self::set_scroller_height(&scroller_apply, next);
             scroller_apply.queue_resize();
             root_apply.queue_resize();
 
@@ -286,10 +280,7 @@ impl LogDrawer {
         self.root.set_visible(visible);
         if visible {
             let height = *self.min_height.borrow();
-            self.scroller.set_min_content_height(height);
-            self.scroller.set_max_content_height(height);
-            self.scroller.set_height_request(height);
-            self.scroller.set_size_request(-1, height);
+            Self::set_scroller_height(&self.scroller, height);
             self.scroller.queue_resize();
             self.root.queue_resize();
             self.scroll_to_bottom();
@@ -324,6 +315,17 @@ impl LogDrawer {
         let mut end = buffer.end_iter();
         buffer.place_cursor(&end);
         text_view.scroll_to_iter(&mut end, 0.0, false, 0.0, 1.0);
+    }
+
+    fn set_scroller_height(scroller: &gtk::ScrolledWindow, height: i32) {
+        // Clear min/max constraints before applying a new fixed height to avoid
+        // GTK assertion failures when toggling between small/large values.
+        scroller.set_min_content_height(-1);
+        scroller.set_max_content_height(-1);
+        scroller.set_min_content_height(height);
+        scroller.set_max_content_height(height);
+        scroller.set_height_request(height);
+        scroller.set_size_request(-1, height);
     }
 
     fn running_package_managers() -> Result<Vec<String>, String> {
